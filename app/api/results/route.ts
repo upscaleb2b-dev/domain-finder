@@ -1,12 +1,7 @@
 import { NextResponse } from 'next/server';
 import { kv } from '@/lib/kv';
-import { verifyDashboardPw } from '@/lib/auth';
 
-export async function GET(request: Request) {
-  if (!verifyDashboardPw(request)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
+export async function GET() {
   const [hits, lastScan, lastDiscover, domains, scanIndex] = await Promise.all([
     kv.get('hits'),
     kv.get('last_scan'),

@@ -36,26 +36,17 @@ function Signal({ on, label }: { on: boolean; label: string }) {
 }
 
 export default function Dashboard() {
-  const [pw, setPw] = useState('');
-  const [authed, setAuthed] = useState(false);
-  const [authError, setAuthError] = useState('');
-
   const [hits, setHits] = useState<Hit[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<'available' | 'bought'>('available');
   const [pendingToggle, setPendingToggle] = useState<string | null>(null);
-
   const [stats, setStats] = useState({ total: 0, progress: 0, lastScan: '', lastDiscover: '' });
 
-  const fetchData = useCallback((password: string) => {
+  const fetchData = useCallback(() => {
     setLoading(true);
-    fetch(`/api/results?pw=${encodeURIComponent(password)}`)
-      .then(r => {
-        if (r.status === 401) { setAuthError('Wrong password'); setAuthed(false); return null; }
-        return r.json();
-      })
+    fetch('/api/results')
+      .then(r => r.json())
       .then(data => {
-        if (!data) return;
         const sorted = (data.hits || []).sort((a: Hit, b: Hit) => b.score - a.score);
         setHits(sorted);
         setStats({
@@ -69,52 +60,11 @@ export default function Dashboard() {
       .catch(() => setLoading(false));
   }, []);
 
-  const tryLogin = () => {
-    setAuthError('');
-    fetch(`/api/results?pw=${encodeURIComponent(pw)}`)
-      .then(r => {
-        if (r.status === 401) { setAuthError('Wrong password'); return null; }
-        return r.json();
-      })
-      .then(data => {
-        if (!data) return;
-        sessionStorage.setItem('lgf_pw', pw);
-        setAuthed(true);
-        const sorted = (data.hits || []).sort((a: Hit, b: Hit) => b.score - a.score);
-        setHits(sorted);
-        setStats({
-          total: data.totalDomains,
-          progress: data.progress,
-          lastScan: data.lastScan?.timestamp || '',
-          lastDiscover: data.lastDiscover?.timestamp || '',
-        });
-      });
-  };
-
-  useEffect(() => {
-    const saved = sessionStorage.getItem('lgf_pw');
-    if (saved) {
-      setPw(saved);
-      fetch(`/api/results?pw=${encodeURIComponent(saved)}`)
-        .then(r => r.status === 401 ? null : r.json())
-        .then(data => {
-          if (!data) return;
-          setAuthed(true);
-          const sorted = (data.hits || []).sort((a: Hit, b: Hit) => b.score - a.score);
-          setHits(sorted);
-          setStats({
-            total: data.totalDomains,
-            progress: data.progress,
-            lastScan: data.lastScan?.timestamp || '',
-            lastDiscover: data.lastDiscover?.timestamp || '',
-          });
-        });
-    }
-  }, []);
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   const toggleBought = async (domain: string, current: boolean) => {
     setPendingToggle(domain);
-    await fetch(`/api/purchase?pw=${encodeURIComponent(pw)}`, {
+    await fetch('/api/purchase', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ domain, bought: !current }),
@@ -123,28 +73,10 @@ export default function Dashboard() {
     setPendingToggle(null);
   };
 
-  if (!authed) {
+  if (loading) {
     return (
       <div className="min-h-screen bg-gray-950 flex items-center justify-center">
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-8 w-80">
-          <h1 className="text-xl font-bold mb-1">Legacy Google Finder</h1>
-          <p className="text-gray-500 text-sm mb-6">Private dashboard</p>
-          <input
-            type="password"
-            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm mb-3 focus:outline-none focus:border-blue-500"
-            placeholder="Password"
-            value={pw}
-            onChange={e => setPw(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && tryLogin()}
-          />
-          {authError && <p className="text-red-400 text-xs mb-3">{authError}</p>}
-          <button
-            onClick={tryLogin}
-            className="w-full bg-blue-600 hover:bg-blue-500 rounded-lg py-2 text-sm font-semibold transition-colors"
-          >
-            Enter
-          </button>
-        </div>
+        <p className="text-gray-400">Loading...</p>
       </div>
     );
   }
@@ -163,18 +95,27 @@ export default function Dashboard() {
     <div className="min-h-screen bg-gray-950 p-6">
       <div className="max-w-6xl mx-auto">
 
-        {/* Header */}
         <div className="flex items-start justify-between mb-8">
           <div>
             <h1 className="text-2xl font-bold mb-1">Legacy Google Finder</h1>
             <p className="text-gray-500 text-sm">Auto-discovers & scans pre-2012 domains for active Google Apps panels</p>
           </div>
-          <button
-            onClick={() => fetchData(pw)}
-            className="text-xs text-gray-500 hover:text-gray-300 border border-gray-800 hover:border-gray-600 rounded px-3 py-1.5 transition-colors"
-          >
-            {loading ? 'Refreshing…' : 'Refresh'}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={fetchData}
+              className="text-xs text-gray-500 hover:text-gray-300 border border-gray-800 hover:border-gray-600 rounded px-3 py-1.5 transition-colors"
+            >
+              Refresh
+            </button>
+            <form method="POST" action="/api/logout">
+              <button
+                type="submit"
+                className="text-xs text-gray-500 hover:text-gray-300 border border-gray-800 hover:border-gray-600 rounded px-3 py-1.5 transition-colors"
+              >
+                Log out
+              </button>
+            </form>
+          </div>
         </div>
 
         {/* Stat cards */}
@@ -193,7 +134,7 @@ export default function Dashboard() {
           ))}
         </div>
 
-        {/* Scan status bar */}
+        {/* Scan status */}
         <div className="bg-gray-900 border border-gray-800 rounded-lg p-3 mb-6 flex flex-wrap gap-4 text-xs text-gray-500">
           <span>
             Last scan:{' '}
@@ -217,10 +158,8 @@ export default function Dashboard() {
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors capitalize ${
-                tab === t
-                  ? 'bg-gray-800 text-white'
-                  : 'text-gray-500 hover:text-gray-300'
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                tab === t ? 'bg-gray-800 text-white' : 'text-gray-500 hover:text-gray-300'
               }`}
             >
               {t === 'available' ? `Available (${available.length})` : `Bought (${bought.length})`}
@@ -263,29 +202,13 @@ export default function Dashboard() {
                     key={hit.domain}
                     className={`border-b border-gray-800/60 hover:bg-gray-900/60 transition-colors ${hit.bought ? 'opacity-50' : ''}`}
                   >
-                    {/* Rank */}
-                    <td className="px-3 py-3 text-gray-600 text-xs w-8">
-                      {tab === 'available' ? i + 1 : ''}
-                    </td>
-
-                    {/* Domain */}
+                    <td className="px-3 py-3 text-gray-600 text-xs">{tab === 'available' ? i + 1 : ''}</td>
                     <td className="px-3 py-3 font-mono">
-                      <a
-                        href={`https://${hit.domain}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-400 hover:underline"
-                      >
+                      <a href={`https://${hit.domain}`} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">
                         {hit.domain}
                       </a>
                     </td>
-
-                    {/* Score */}
-                    <td className="px-3 py-3 text-center">
-                      <ScoreBadge score={hit.score} />
-                    </td>
-
-                    {/* Signals */}
+                    <td className="px-3 py-3 text-center"><ScoreBadge score={hit.score} /></td>
                     <td className="px-3 py-3">
                       <div className="flex items-center justify-center gap-1.5">
                         <Signal on={hit.googleMX} label="Google MX" />
@@ -294,26 +217,14 @@ export default function Dashboard() {
                         <Signal on={hit.adminConsole} label="Admin console redirect" />
                       </div>
                     </td>
-
-                    {/* Reg year */}
-                    <td className="px-3 py-3 text-center text-gray-400">
-                      {hit.registrationYear ?? '—'}
-                    </td>
-
-                    {/* Found date */}
-                    <td className="px-3 py-3 text-gray-500 text-xs">
-                      {new Date(hit.timestamp).toLocaleDateString()}
-                    </td>
-
-                    {/* Bought toggle */}
+                    <td className="px-3 py-3 text-center text-gray-400">{hit.registrationYear ?? '—'}</td>
+                    <td className="px-3 py-3 text-gray-500 text-xs">{new Date(hit.timestamp).toLocaleDateString()}</td>
                     <td className="px-3 py-3 text-center">
                       <button
                         onClick={() => toggleBought(hit.domain, hit.bought)}
                         disabled={pendingToggle === hit.domain}
                         className={`w-6 h-6 rounded border-2 flex items-center justify-center mx-auto transition-colors ${
-                          hit.bought
-                            ? 'bg-purple-600 border-purple-600 text-white'
-                            : 'border-gray-600 hover:border-purple-500'
+                          hit.bought ? 'bg-purple-600 border-purple-600 text-white' : 'border-gray-600 hover:border-purple-500'
                         } ${pendingToggle === hit.domain ? 'opacity-40' : ''}`}
                         title={hit.bought ? 'Mark as not bought' : 'Mark as bought'}
                       >
