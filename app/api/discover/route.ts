@@ -4,7 +4,7 @@
  * Runs every 6 hours via Vercel cron.
  */
 import { NextResponse } from 'next/server';
-import { kv } from '@vercel/kv';
+import { kv } from '@/lib/kv';
 import { verifyCronSecret } from '@/lib/auth';
 
 const CDX_BASE = 'https://web.archive.org/cdx/search/cdx';

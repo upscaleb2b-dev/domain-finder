@@ -3,7 +3,7 @@
  * Runs every hour via Vercel cron.
  */
 import { NextResponse } from 'next/server';
-import { kv } from '@vercel/kv';
+import { kv } from '@/lib/kv';
 import { hasGoogleMX, hasLegacyCNAME, hasStartCNAME, checkAdminConsole } from '@/lib/dns';
 import { computeScore, type ScanResult } from '@/lib/score';
 import { sendHitEmail } from '@/lib/email';

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { kv } from '@vercel/kv';
+import { kv } from '@/lib/kv';
 import { verifyDashboardPw } from '@/lib/auth';
 import type { ScanResult } from '@/lib/score';
 
