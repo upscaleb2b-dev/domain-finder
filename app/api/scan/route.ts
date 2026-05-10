@@ -3,7 +3,7 @@
  * Runs every hour via Vercel cron.
  */
 import { NextResponse } from 'next/server';
-import { kv } from '@vercel/kv';
+import { kv } from '@/lib/kv';
 import { hasGoogleMX, hasLegacyCNAME, hasStartCNAME, checkAdminConsole } from '@/lib/dns';
 import { computeScore, type ScanResult } from '@/lib/score';
 import { sendHitEmail } from '@/lib/email';
@@ -42,7 +42,7 @@ async function scanDomain(domain: string): Promise<ScanResult> {
   const partial = { domain, googleMX, legacyCNAME, startCNAME, adminConsole, registrationYear };
   const score = computeScore(partial);
 
-  return { ...partial, score, timestamp: new Date().toISOString() };
+  return { ...partial, score, timestamp: new Date().toISOString(), bought: false };
 }
 
 export async function GET(request: Request) {
