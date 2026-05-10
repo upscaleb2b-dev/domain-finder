@@ -42,7 +42,7 @@ async function scanDomain(domain: string): Promise<ScanResult> {
   const partial = { domain, googleMX, legacyCNAME, startCNAME, adminConsole, registrationYear };
   const score = computeScore(partial);
 
-  return { ...partial, score, timestamp: new Date().toISOString() };
+  return { ...partial, score, timestamp: new Date().toISOString(), bought: false };
 }
 
 export async function GET(request: Request) {
