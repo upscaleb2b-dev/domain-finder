@@ -100,22 +100,12 @@ export default function Dashboard() {
             <h1 className="text-2xl font-bold mb-1">Legacy Google Finder</h1>
             <p className="text-gray-500 text-sm">Auto-discovers & scans pre-2012 domains for active Google Apps panels</p>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={fetchData}
-              className="text-xs text-gray-500 hover:text-gray-300 border border-gray-800 hover:border-gray-600 rounded px-3 py-1.5 transition-colors"
-            >
-              Refresh
-            </button>
-            <form method="POST" action="/api/logout">
-              <button
-                type="submit"
-                className="text-xs text-gray-500 hover:text-gray-300 border border-gray-800 hover:border-gray-600 rounded px-3 py-1.5 transition-colors"
-              >
-                Log out
-              </button>
-            </form>
-          </div>
+          <button
+            onClick={fetchData}
+            className="text-xs text-gray-500 hover:text-gray-300 border border-gray-800 hover:border-gray-600 rounded px-3 py-1.5 transition-colors"
+          >
+            Refresh
+          </button>
         </div>
 
         {/* Stat cards */}
