@@ -16,12 +16,21 @@ import { verifyCronSecret } from '@/lib/auth';
 const BATCH_SIZE = parseInt(process.env.BATCH_SIZE || '300');
 const HIT_THRESHOLD = 40;
 
+// TLDs that can't be publicly registered — prune immediately without RDAP
+const BLOCKED_SUFFIXES = ['.edu', '.gov', '.mil', '.ac.uk', '.sch.uk'];
+const BLOCKED_PATTERNS = ['.k12.'];
+function isBlocked(domain: string): boolean {
+  return BLOCKED_SUFFIXES.some(s => domain.endsWith(s)) ||
+         BLOCKED_PATTERNS.some(p => domain.includes(p));
+}
+
 type DomainOutcome =
   | { tag: 'result'; data: ScanResult }
   | { tag: 'registered' }
   | { tag: 'skip' };
 
 async function scanDomain(domain: string): Promise<DomainOutcome> {
+  if (isBlocked(domain)) return { tag: 'registered' };
   const rdap = await getRDAPInfo(domain);
   if (rdap.error) return { tag: 'skip' };
   if (!rdap.available && !rdap.pendingDrop) return { tag: 'registered' };
