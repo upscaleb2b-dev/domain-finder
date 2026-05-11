@@ -75,6 +75,12 @@ function useNow() {
   return now;
 }
 
+function fmtCount(n: number): string {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(2) + 'M';
+  if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K';
+  return n.toString();
+}
+
 function timeSince(ts: string, now: number): string {
   const diff = Math.floor((now - new Date(ts).getTime()) / 1000);
   if (diff < 60) return `${diff}s ago`;
@@ -87,7 +93,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<'available' | 'bought'>('available');
   const [pendingToggle, setPendingToggle] = useState<string | null>(null);
-  const [stats, setStats] = useState({ total: 0, progress: 0, lastScan: '', lastDiscover: '' });
+  const [stats, setStats] = useState({ total: 0, progress: 0, lastScan: '', lastDiscover: '', totalScanned: 0 });
   const [scanLog, setScanLog] = useState<LogEntry[]>([]);
   const [showLog, setShowLog] = useState(false);
   const now = useNow();
@@ -105,6 +111,7 @@ export default function Dashboard() {
           progress: data.progress,
           lastScan: data.lastScan?.timestamp || '',
           lastDiscover: data.lastDiscover?.timestamp || '',
+          totalScanned: data.totalScanned || 0,
         });
         setLoading(false);
       })
@@ -185,10 +192,11 @@ export default function Dashboard() {
         </div>
 
         {/* Stat cards */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-6">
           {[
-            { label: 'Queued', value: stats.total },
-            { label: 'Scanned', value: `${stats.progress}%` },
+            { label: 'Total Scanned', value: fmtCount(stats.totalScanned), color: 'text-cyan-400' },
+            { label: 'Queued', value: fmtCount(stats.total) },
+            { label: 'Progress', value: `${stats.progress}%` },
             { label: 'Tier S (80+)', value: tierCounts.S, color: 'text-emerald-400' },
             { label: 'Tier A (60+)', value: tierCounts.A, color: 'text-blue-400' },
             { label: 'Bought', value: bought.length, color: 'text-purple-400' },

@@ -136,6 +136,7 @@ export async function GET(request: Request) {
         kv.set('scan_index', nextIndex),
         kv.set('last_scan', logEntry),
         kv.set('scan_log', [logEntry, ...prevLog].slice(0, 50)),
+        kv.incrby('total_scanned', batch.length * workers),
       ]);
     }
 
