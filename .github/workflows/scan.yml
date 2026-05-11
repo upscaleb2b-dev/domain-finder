@@ -1,0 +1,19 @@
+name: 24/7 Domain Scanner
+
+on:
+  schedule:
+    # Every 5 minutes — GitHub's minimum interval
+    - cron: '*/5 * * * *'
+  workflow_dispatch: # allow manual trigger too
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - name: Trigger scan batch
+        run: |
+          curl -sf --max-time 90 \
+            "${{ secrets.SCANNER_URL }}/api/scan" \
+            -o /dev/null \
+            -w "Status: %{http_code} | Time: %{time_total}s\n"
