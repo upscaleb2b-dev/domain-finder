@@ -4,7 +4,10 @@
  */
 import { NextResponse } from 'next/server';
 import { kv } from '@/lib/kv';
-import { hasGoogleMX, hasLegacyCNAME, hasStartCNAME, checkAdminConsole } from '@/lib/dns';
+import {
+  hasGoogleMX, hasLegacyCNAME, hasStartCNAME,
+  hasSpfGoogle, hasHistoricalGoogleSites, checkAdminConsole,
+} from '@/lib/dns';
 import { computeScore, type ScanResult } from '@/lib/score';
 import { sendHitEmail } from '@/lib/email';
 import { verifyCronSecret } from '@/lib/auth';
@@ -14,8 +17,6 @@ const HIT_THRESHOLD = 40;
 
 async function getRegistrationYear(domain: string): Promise<number | null> {
   try {
-    // Use RDAP (free, no key needed)
-    const tld = domain.split('.').pop();
     const res = await fetch(`https://rdap.org/domain/${domain}`, {
       signal: AbortSignal.timeout(5000),
     });
@@ -30,18 +31,32 @@ async function getRegistrationYear(domain: string): Promise<number | null> {
   }
 }
 
-async function scanDomain(domain: string): Promise<ScanResult> {
-  const [googleMX, legacyCNAME, startCNAME, adminConsole, registrationYear] = await Promise.all([
-    hasGoogleMX(domain),
-    hasLegacyCNAME(domain),
-    hasStartCNAME(domain),
-    checkAdminConsole(domain),
-    getRegistrationYear(domain),
-  ]);
+async function scanDomain(domain: string): Promise<ScanResult | null> {
+  const [googleMX, legacyCNAME, startCNAME, spfGoogle, historicalGoogleSites, adminResult, registrationYear] =
+    await Promise.all([
+      hasGoogleMX(domain),
+      hasLegacyCNAME(domain),
+      hasStartCNAME(domain),
+      hasSpfGoogle(domain),
+      hasHistoricalGoogleSites(domain),
+      checkAdminConsole(domain),
+      getRegistrationYear(domain),
+    ]);
 
-  const partial = { domain, googleMX, legacyCNAME, startCNAME, adminConsole, registrationYear };
+  // Skip domains explicitly flagged as not using Google Workspace
+  if (adminResult.redFlag) return null;
+
+  const partial = {
+    domain,
+    googleMX,
+    legacyCNAME,
+    startCNAME,
+    adminConsole: adminResult.active,
+    spfGoogle,
+    historicalGoogleSites,
+    registrationYear,
+  };
   const score = computeScore(partial);
-
   return { ...partial, score, timestamp: new Date().toISOString(), bought: false };
 }
 
@@ -61,16 +76,24 @@ export async function GET(request: Request) {
     if (currentIndex >= domainList.length) currentIndex = 0;
     const batch = domainList.slice(currentIndex, currentIndex + BATCH_SIZE);
 
-    const results = await Promise.all(batch.map(d => scanDomain(d)));
+    const rawResults = await Promise.all(batch.map(d => scanDomain(d)));
+    const results = rawResults.filter((r): r is ScanResult => r !== null);
     const hits = results.filter(r => r.score >= HIT_THRESHOLD);
 
-    // Merge hits into KV (deduplicate by domain)
     if (hits.length > 0) {
       const existing: ScanResult[] = (await kv.get('hits')) || [];
       const existingDomains = new Set(existing.map(h => h.domain));
       const newHits = hits.filter(h => !existingDomains.has(h.domain));
-      const updated = [...newHits, ...existing].slice(0, 1000);
-      await kv.set('hits', updated);
+      // Re-scan existing hits with updated data (score may have changed)
+      const updatedExisting = existing.map(h => {
+        const rescanned = results.find(r => r.domain === h.domain);
+        return rescanned ? { ...rescanned, bought: h.bought } : h;
+      });
+      const combined = [
+        ...newHits,
+        ...updatedExisting.filter(h => !newHits.some(n => n.domain === h.domain)),
+      ].slice(0, 1000);
+      await kv.set('hits', combined);
 
       if (newHits.length > 0) {
         await sendHitEmail(newHits).catch(err => console.error('Email error:', err));
