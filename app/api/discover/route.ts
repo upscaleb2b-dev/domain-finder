@@ -22,11 +22,14 @@ const CDX_PATTERNS = [
   'contacts.google.com/a/*',
 ];
 
+const SKIP_TLDS = ['.edu', '.gov', '.mil'];
+
 function extractDomain(rawUrl: string): string | null {
   const match = rawUrl.match(/\/a\/([a-z0-9][a-z0-9\-\.]{1,60}\.[a-z]{2,})/i);
   if (!match) return null;
   const d = match[1].toLowerCase();
   if (d.endsWith('.google.com') || d.endsWith('.googleapis.com')) return null;
+  if (SKIP_TLDS.some(tld => d.endsWith(tld))) return null;
   return d;
 }
 
