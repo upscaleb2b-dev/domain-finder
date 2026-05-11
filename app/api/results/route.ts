@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server';
 import { kv } from '@/lib/kv';
 
+const BLOCKED_SUFFIXES = ['.edu', '.gov', '.mil', '.ac.uk', '.sch.uk'];
+const BLOCKED_PATTERNS = ['.k12.'];
+function isBlocked(d: string): boolean {
+  return BLOCKED_SUFFIXES.some(s => d.endsWith(s)) || BLOCKED_PATTERNS.some(p => d.includes(p));
+}
+
 export async function GET() {
   const [hits, lastScan, lastDiscover, domains, scanIndex, scanLog, totalScanned] = await Promise.all([
     kv.get('hits'),
@@ -15,8 +21,10 @@ export async function GET() {
   const total = (domains || []).length;
   const index = scanIndex || 0;
 
+  const cleanHits = ((hits as any[]) || []).filter((h: any) => !isBlocked(h.domain));
+
   return NextResponse.json({
-    hits: hits || [],
+    hits: cleanHits,
     lastScan: lastScan || null,
     lastDiscover: lastDiscover || null,
     scanLog: scanLog || [],
