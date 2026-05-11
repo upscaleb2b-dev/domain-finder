@@ -66,6 +66,22 @@ interface LogEntry {
   batchStart: number;
 }
 
+function useNow() {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  return now;
+}
+
+function timeSince(ts: string, now: number): string {
+  const diff = Math.floor((now - new Date(ts).getTime()) / 1000);
+  if (diff < 60) return `${diff}s ago`;
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  return `${Math.floor(diff / 3600)}h ago`;
+}
+
 export default function Dashboard() {
   const [hits, setHits] = useState<Hit[]>([]);
   const [loading, setLoading] = useState(true);
@@ -74,9 +90,10 @@ export default function Dashboard() {
   const [stats, setStats] = useState({ total: 0, progress: 0, lastScan: '', lastDiscover: '' });
   const [scanLog, setScanLog] = useState<LogEntry[]>([]);
   const [showLog, setShowLog] = useState(false);
+  const now = useNow();
 
-  const fetchData = useCallback(() => {
-    setLoading(true);
+  const fetchData = useCallback((silent = false) => {
+    if (!silent) setLoading(true);
     fetch('/api/results')
       .then(r => r.json())
       .then(data => {
@@ -95,6 +112,15 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Silent auto-refresh every 30 seconds
+  useEffect(() => {
+    const id = setInterval(() => fetchData(true), 30_000);
+    return () => clearInterval(id);
+  }, [fetchData]);
+
+  const scanAge = stats.lastScan ? (now - new Date(stats.lastScan).getTime()) / 1000 : Infinity;
+  const isLive = scanAge < 600; // active if scanned within last 10 minutes
 
   const toggleBought = async (domain: string, current: boolean) => {
     setPendingToggle(domain);
@@ -131,11 +157,27 @@ export default function Dashboard() {
 
         <div className="flex items-start justify-between mb-8">
           <div>
-            <h1 className="text-2xl font-bold mb-1">Legacy Google Finder</h1>
+            <div className="flex items-center gap-3 mb-1">
+              <h1 className="text-2xl font-bold">Legacy Google Finder</h1>
+              {isLive ? (
+                <span className="flex items-center gap-1.5 text-xs text-green-400 font-medium">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
+                  </span>
+                  Live
+                </span>
+              ) : (
+                <span className="flex items-center gap-1.5 text-xs text-gray-600 font-medium">
+                  <span className="inline-flex rounded-full h-2 w-2 bg-gray-700" />
+                  Idle
+                </span>
+              )}
+            </div>
             <p className="text-gray-500 text-sm">Scans expired & dropping domains for active Google Apps panels</p>
           </div>
           <button
-            onClick={fetchData}
+            onClick={() => fetchData()}
             className="text-xs text-gray-500 hover:text-gray-300 border border-gray-800 hover:border-gray-600 rounded px-3 py-1.5 transition-colors"
           >
             Refresh
@@ -162,11 +204,13 @@ export default function Dashboard() {
         <div className="bg-gray-900 border border-gray-800 rounded-lg p-3 mb-2 flex flex-wrap gap-4 text-xs text-gray-500">
           <span>
             Last scan:{' '}
-            <span className="text-gray-300">{stats.lastScan ? new Date(stats.lastScan).toLocaleString() : 'Never'}</span>
+            <span className={isLive ? 'text-green-400' : 'text-gray-300'}>
+              {stats.lastScan ? timeSince(stats.lastScan, now) : 'Never'}
+            </span>
           </span>
           <span>
             Last discover:{' '}
-            <span className="text-gray-300">{stats.lastDiscover ? new Date(stats.lastDiscover).toLocaleString() : 'Never'}</span>
+            <span className="text-gray-300">{stats.lastDiscover ? timeSince(stats.lastDiscover, now) : 'Never'}</span>
           </span>
           <div className="ml-auto flex items-center gap-3">
             <div className="w-40 bg-gray-800 rounded-full h-1.5">
