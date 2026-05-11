@@ -6,12 +6,11 @@ interface Hit {
   domain: string;
   available: boolean;
   pendingDrop: boolean;
-  googleMX: boolean;
-  legacyCNAME: boolean;
-  startCNAME: boolean;
-  adminConsole: boolean;
-  spfGoogle: boolean;
-  historicalGoogleSites: boolean;
+  mxRecords: boolean;
+  cnameSignal: boolean;
+  subCNAME: boolean;
+  panelActive: boolean;
+  spfRecord: boolean;
   registrationYear: number | null;
   score: number;
   timestamp: string;
@@ -62,6 +61,7 @@ interface LogEntry {
   scanned: number;
   available: number;
   skipped: number;
+  pruned: number;
   hits: number;
   batchStart: number;
 }
@@ -158,7 +158,7 @@ export default function Dashboard() {
         <div className="flex items-start justify-between mb-8">
           <div>
             <div className="flex items-center gap-3 mb-1">
-              <h1 className="text-2xl font-bold">Legacy Google Finder</h1>
+              <h1 className="text-2xl font-bold">DropRadar</h1>
               {isLive ? (
                 <span className="flex items-center gap-1.5 text-xs text-green-400 font-medium">
                   <span className="relative flex h-2 w-2">
@@ -174,7 +174,7 @@ export default function Dashboard() {
                 </span>
               )}
             </div>
-            <p className="text-gray-500 text-sm">Scans expired & dropping domains for active Google Apps panels</p>
+            <p className="text-gray-500 text-sm">Monitors expiring and dropped domains for residual service configurations</p>
           </div>
           <button
             onClick={() => fetchData()}
@@ -241,7 +241,8 @@ export default function Dashboard() {
                     <th className="px-4 py-1.5 text-left">Time</th>
                     <th className="px-3 py-1.5 text-center">Checked</th>
                     <th className="px-3 py-1.5 text-center text-green-600">Available</th>
-                    <th className="px-3 py-1.5 text-center text-gray-600">Skipped</th>
+                    <th className="px-3 py-1.5 text-center text-red-800">Pruned</th>
+                    <th className="px-3 py-1.5 text-center text-gray-600">Errors</th>
                     <th className="px-3 py-1.5 text-center text-blue-600">Hits</th>
                     <th className="px-3 py-1.5 text-center">Batch start</th>
                   </tr>
@@ -252,6 +253,7 @@ export default function Dashboard() {
                       <td className="px-4 py-1.5 text-gray-400">{new Date(entry.timestamp).toLocaleTimeString()}</td>
                       <td className="px-3 py-1.5 text-center text-gray-400">{entry.scanned}</td>
                       <td className="px-3 py-1.5 text-center text-green-400">{entry.available}</td>
+                      <td className="px-3 py-1.5 text-center text-red-700">{entry.pruned || 0}</td>
                       <td className="px-3 py-1.5 text-center text-gray-600">{entry.skipped}</td>
                       <td className="px-3 py-1.5 text-center text-blue-400 font-semibold">{entry.hits || 0}</td>
                       <td className="px-3 py-1.5 text-center text-gray-600">{entry.batchStart}</td>
@@ -280,19 +282,18 @@ export default function Dashboard() {
 
         {/* Legend */}
         <div className="flex items-center flex-wrap gap-4 mb-3 text-xs text-gray-500">
-          <span className="flex items-center gap-1.5"><Signal on label="" /> start.* CNAME</span>
-          <span className="flex items-center gap-1.5"><Signal on label="" /> Admin console</span>
-          <span className="flex items-center gap-1.5"><Signal on label="" /> Historical Sites</span>
-          <span className="flex items-center gap-1.5"><Signal on label="" /> Google MX</span>
-          <span className="flex items-center gap-1.5"><Signal on label="" /> Legacy CNAME</span>
-          <span className="flex items-center gap-1.5"><Signal on label="" /> SPF Google</span>
+          <span className="flex items-center gap-1.5"><Signal on label="" /> Sub-CNAME</span>
+          <span className="flex items-center gap-1.5"><Signal on label="" /> Panel</span>
+          <span className="flex items-center gap-1.5"><Signal on label="" /> MX</span>
+          <span className="flex items-center gap-1.5"><Signal on label="" /> CNAME</span>
+          <span className="flex items-center gap-1.5"><Signal on label="" /> SPF</span>
         </div>
 
         {/* Table */}
         {shown.length === 0 ? (
           <div className="bg-gray-900 border border-gray-800 rounded-lg p-12 text-center text-gray-500">
             {tab === 'available'
-              ? 'No hits yet — scanner only shows available/dropping domains. Discovery runs every 6h, scanning every hour.'
+              ? 'No results yet — monitoring available and dropping domains. Discovery runs every 6h, scanning every 5 min.'
               : 'No domains marked as bought yet.'}
           </div>
         ) : (
@@ -328,12 +329,11 @@ export default function Dashboard() {
                     <td className="px-3 py-3 text-center"><ScoreBadge score={hit.score} /></td>
                     <td className="px-3 py-3">
                       <div className="flex items-center justify-center gap-1.5">
-                        <Signal on={hit.startCNAME} label="start.* → ghs.google.com (golden signal)" />
-                        <Signal on={hit.adminConsole} label="Admin console live redirect" />
-                        <Signal on={hit.historicalGoogleSites} label="Wayback CDX: Google Sites 2009-2012" />
-                        <Signal on={hit.googleMX} label="Google MX records active" />
-                        <Signal on={hit.legacyCNAME} label="Legacy CNAME (ghs.google.com)" />
-                        <Signal on={hit.spfGoogle} label="SPF includes _spf.google.com" />
+                        <Signal on={hit.subCNAME} label="Sub-CNAME present" />
+                        <Signal on={hit.panelActive} label="Control panel active" />
+                        <Signal on={hit.mxRecords} label="MX records present" />
+                        <Signal on={hit.cnameSignal} label="CNAME match" />
+                        <Signal on={hit.spfRecord} label="SPF match" />
                       </div>
                     </td>
                     <td className="px-3 py-3 text-center text-gray-400">{hit.registrationYear ?? '—'}</td>
