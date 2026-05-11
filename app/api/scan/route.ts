@@ -14,7 +14,7 @@ import { computeScore, type ScanResult } from '@/lib/score';
 import { sendHitEmail } from '@/lib/email';
 import { verifyCronSecret } from '@/lib/auth';
 
-const BATCH_SIZE = parseInt(process.env.BATCH_SIZE || '60');
+const BATCH_SIZE = parseInt(process.env.BATCH_SIZE || '100');
 const HIT_THRESHOLD = 40;
 
 async function scanDomain(domain: string): Promise<ScanResult | null> {
@@ -94,19 +94,26 @@ export async function GET(request: Request) {
     }
 
     const newIndex = currentIndex + BATCH_SIZE;
+    const logEntry = {
+      timestamp: new Date().toISOString(),
+      scanned: batch.length,
+      available: results.length,
+      skipped: batch.length - results.length,
+      hits: hits.length,
+      batchStart: currentIndex,
+    };
+    const prevLog: typeof logEntry[] = (await kv.get('scan_log')) || [];
     await Promise.all([
       kv.set('scan_index', newIndex >= domainList.length ? 0 : newIndex),
-      kv.set('last_scan', {
-        timestamp: new Date().toISOString(),
-        scanned: batch.length,
-        hitsFound: hits.length,
-        batchStart: currentIndex,
-      }),
+      kv.set('last_scan', logEntry),
+      kv.set('scan_log', [logEntry, ...prevLog].slice(0, 50)),
     ]);
 
     return NextResponse.json({
       success: true,
       scanned: batch.length,
+      available: results.length,
+      skipped: batch.length - results.length,
       hits: hits.length,
       nextIndex: newIndex >= domainList.length ? 0 : newIndex,
       totalDomains: domainList.length,
