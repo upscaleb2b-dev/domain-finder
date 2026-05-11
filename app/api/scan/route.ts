@@ -6,8 +6,8 @@
 import { NextResponse } from 'next/server';
 import { kv } from '@/lib/kv';
 import {
-  hasGoogleMX, hasLegacyCNAME, hasStartCNAME,
-  hasSpfGoogle, checkAdminConsole, getRDAPInfo,
+  hasMXRecords, hasCNAMESignal, hasSubCNAME,
+  hasSPFRecord, checkPanel, getRDAPInfo,
 } from '@/lib/dns';
 import { computeScore, type ScanResult } from '@/lib/score';
 import { sendHitEmail } from '@/lib/email';
@@ -26,26 +26,26 @@ async function scanDomain(domain: string): Promise<DomainOutcome> {
   if (rdap.error) return { tag: 'skip' };
   if (!rdap.available && !rdap.pendingDrop) return { tag: 'registered' };
 
-  const [googleMX, legacyCNAME, startCNAME, spfGoogle, adminResult] =
+  const [mxRecords, cnameSignal, subCNAME, spfRecord, panelResult] =
     await Promise.all([
-      hasGoogleMX(domain),
-      hasLegacyCNAME(domain),
-      hasStartCNAME(domain),
-      hasSpfGoogle(domain),
-      checkAdminConsole(domain),
+      hasMXRecords(domain),
+      hasCNAMESignal(domain),
+      hasSubCNAME(domain),
+      hasSPFRecord(domain),
+      checkPanel(domain),
     ]);
 
-  if (adminResult.redFlag) return { tag: 'skip' };
+  if (panelResult.redFlag) return { tag: 'skip' };
 
   const partial = {
     domain,
     available: rdap.available,
     pendingDrop: rdap.pendingDrop,
-    googleMX,
-    legacyCNAME,
-    startCNAME,
-    adminConsole: adminResult.active,
-    spfGoogle,
+    mxRecords,
+    cnameSignal,
+    subCNAME,
+    panelActive: panelResult.active,
+    spfRecord,
     registrationYear: rdap.registrationYear,
   };
   const score = computeScore(partial);

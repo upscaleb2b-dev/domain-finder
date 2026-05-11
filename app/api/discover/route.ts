@@ -80,8 +80,6 @@ async function fetchCommonCrawl(indexUrl: string, pattern: string): Promise<stri
 }
 
 export async function GET() {
-  // Run all queries in parallel — wall time = slowest single request (~7s)
-  // rather than sequential total (~120s which blows the 10s Vercel limit)
   const waybackPromises = CDX_PATTERNS.map(p => fetchWayback(p));
   const ccPromises = CC_INDEXES.flatMap(idx =>
     CDX_PATTERNS.slice(0, 3).map(p => fetchCommonCrawl(idx, p))

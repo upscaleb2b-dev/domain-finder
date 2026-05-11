@@ -2,7 +2,7 @@ name: Domain Discovery
 
 on:
   schedule:
-    # Every 6 hours — archive.org CDX rate limits, no point going faster
+    # Every 6 hours
     - cron: '0 */6 * * *'
   workflow_dispatch:
 

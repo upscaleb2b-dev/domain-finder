@@ -6,11 +6,11 @@ interface Hit {
   domain: string;
   available: boolean;
   pendingDrop: boolean;
-  googleMX: boolean;
-  legacyCNAME: boolean;
-  startCNAME: boolean;
-  adminConsole: boolean;
-  spfGoogle: boolean;
+  mxRecords: boolean;
+  cnameSignal: boolean;
+  subCNAME: boolean;
+  panelActive: boolean;
+  spfRecord: boolean;
   registrationYear: number | null;
   score: number;
   timestamp: string;
@@ -282,11 +282,11 @@ export default function Dashboard() {
 
         {/* Legend */}
         <div className="flex items-center flex-wrap gap-4 mb-3 text-xs text-gray-500">
-          <span className="flex items-center gap-1.5"><Signal on label="" /> start.* CNAME</span>
-          <span className="flex items-center gap-1.5"><Signal on label="" /> Admin console</span>
-          <span className="flex items-center gap-1.5"><Signal on label="" /> Google MX</span>
-          <span className="flex items-center gap-1.5"><Signal on label="" /> Legacy CNAME</span>
-          <span className="flex items-center gap-1.5"><Signal on label="" /> SPF Google</span>
+          <span className="flex items-center gap-1.5"><Signal on label="" /> Sub-CNAME</span>
+          <span className="flex items-center gap-1.5"><Signal on label="" /> Panel</span>
+          <span className="flex items-center gap-1.5"><Signal on label="" /> MX</span>
+          <span className="flex items-center gap-1.5"><Signal on label="" /> CNAME</span>
+          <span className="flex items-center gap-1.5"><Signal on label="" /> SPF</span>
         </div>
 
         {/* Table */}
@@ -329,11 +329,11 @@ export default function Dashboard() {
                     <td className="px-3 py-3 text-center"><ScoreBadge score={hit.score} /></td>
                     <td className="px-3 py-3">
                       <div className="flex items-center justify-center gap-1.5">
-                        <Signal on={hit.startCNAME} label="start.* → ghs.google.com (golden signal)" />
-                        <Signal on={hit.adminConsole} label="Admin console live redirect" />
-                        <Signal on={hit.googleMX} label="Google MX records active" />
-                        <Signal on={hit.legacyCNAME} label="Legacy CNAME (ghs.google.com)" />
-                        <Signal on={hit.spfGoogle} label="SPF includes _spf.google.com" />
+                        <Signal on={hit.subCNAME} label="Sub-CNAME present" />
+                        <Signal on={hit.panelActive} label="Control panel active" />
+                        <Signal on={hit.mxRecords} label="MX records present" />
+                        <Signal on={hit.cnameSignal} label="CNAME match" />
+                        <Signal on={hit.spfRecord} label="SPF match" />
                       </div>
                     </td>
                     <td className="px-3 py-3 text-center text-gray-400">{hit.registrationYear ?? '—'}</td>
