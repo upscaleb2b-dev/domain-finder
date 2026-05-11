@@ -13,9 +13,6 @@ export interface ScanResult {
   bought: boolean;
 }
 
-// Scoring weights derived from observed success rates.
-// start.* CNAME → ghs.google.com is the single strongest pre-2010 signal.
-// Admin console redirect proves the panel is still live.
 export function computeScore(r: Omit<ScanResult, 'score' | 'timestamp' | 'bought'>): number {
   let score = 0;
   if (r.startCNAME) score += 55;

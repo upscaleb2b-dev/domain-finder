@@ -158,7 +158,7 @@ export default function Dashboard() {
         <div className="flex items-start justify-between mb-8">
           <div>
             <div className="flex items-center gap-3 mb-1">
-              <h1 className="text-2xl font-bold">Legacy Google Finder</h1>
+              <h1 className="text-2xl font-bold">DropRadar</h1>
               {isLive ? (
                 <span className="flex items-center gap-1.5 text-xs text-green-400 font-medium">
                   <span className="relative flex h-2 w-2">
@@ -174,7 +174,7 @@ export default function Dashboard() {
                 </span>
               )}
             </div>
-            <p className="text-gray-500 text-sm">Scans expired & dropping domains for active Google Apps panels</p>
+            <p className="text-gray-500 text-sm">Monitors expiring and dropped domains for residual service configurations</p>
           </div>
           <button
             onClick={() => fetchData()}
@@ -293,7 +293,7 @@ export default function Dashboard() {
         {shown.length === 0 ? (
           <div className="bg-gray-900 border border-gray-800 rounded-lg p-12 text-center text-gray-500">
             {tab === 'available'
-              ? 'No hits yet — scanner only shows available/dropping domains. Discovery runs every 6h, scanning every hour.'
+              ? 'No results yet — monitoring available and dropping domains. Discovery runs every 6h, scanning every 5 min.'
               : 'No domains marked as bought yet.'}
           </div>
         ) : (

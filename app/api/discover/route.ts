@@ -1,20 +1,18 @@
 /**
- * Discovers pre-2012 domains via Archive.org CDX and multiple CommonCrawl indexes.
- * Runs every 6 hours via Vercel cron / GitHub Actions.
+ * Populates the domain queue via CDX index queries.
+ * Runs every 6 hours via GitHub Actions.
  */
 import { NextResponse } from 'next/server';
 import { kv } from '@/lib/kv';
 
 const WAYBACK_CDX = 'https://web.archive.org/cdx/search/cdx';
 
-// CommonCrawl indexes from the 2008-2012 era — each is a different crawl dataset
 const CC_INDEXES = [
   'https://index.commoncrawl.org/CC-MAIN-2008-2009-index',
   'https://index.commoncrawl.org/CC-MAIN-2009-2010-index',
   'https://index.commoncrawl.org/CC-MAIN-2012-20-index',
 ];
 
-// All Google Apps /a/ paths that prove legacy free tier was active 2006-2012
 const CDX_PATTERNS = [
   'sites.google.com/a/*',
   'mail.google.com/a/*',
@@ -106,12 +104,6 @@ export async function GET() {
     timestamp: new Date().toISOString(),
     discovered: newDomains.length,
     total: merged.length,
-    sources: [
-      'archive.org CDX (6 patterns × 2000)',
-      'CommonCrawl 2008-09 (3 patterns × 1000)',
-      'CommonCrawl 2009-10 (3 patterns × 1000)',
-      'CommonCrawl 2012 (3 patterns × 1000)',
-    ],
   });
 
   return NextResponse.json({

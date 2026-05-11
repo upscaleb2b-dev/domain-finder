@@ -1,10 +1,7 @@
 /**
- * Scans a batch of domains for active legacy Google Apps signals.
- *
- * Supports parallel workers via ?worker=N&workers=10 query params.
- * Worker 0 (primary) owns all Redis state writes (index, pruning, log).
- * Workers 1–9 scan only; they write hits if found but touch no other state.
- * This lets 10 GitHub Actions jobs fire simultaneously with zero race conditions.
+ * Scans a domain batch for availability and service signals.
+ * Supports parallel workers via ?worker=N&workers=10.
+ * Worker 0 owns Redis state; workers 1–N scan only.
  */
 import { NextResponse } from 'next/server';
 import { kv } from '@/lib/kv';

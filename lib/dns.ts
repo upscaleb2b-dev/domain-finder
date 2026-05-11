@@ -27,11 +27,10 @@ export async function hasGoogleMX(domain: string): Promise<boolean> {
   );
 }
 
-// ghs.google.com = legacy free tier; ghs.googlehosted.com = paid Workspace
 const LEGACY_TARGETS = ['ghs.google.com'];
 const ALL_GOOGLE_CNAME = ['ghs.google.com', 'ghs.googlehosted.com'];
 
-// Checks mail/calendar/docs/drive/sites subdomains for legacy CNAME
+
 export async function hasLegacyCNAME(domain: string): Promise<boolean> {
   const subs = ['mail', 'calendar', 'docs', 'drive', 'sites'];
   const results = await Promise.all(subs.map(sub => queryDNS(`${sub}.${domain}`, 'CNAME')));
@@ -42,7 +41,6 @@ export async function hasLegacyCNAME(domain: string): Promise<boolean> {
   );
 }
 
-// start.domain.com → ghs.google.com is the single strongest pre-2010 signal
 export async function hasStartCNAME(domain: string): Promise<boolean> {
   const answers = await queryDNS(`start.${domain}`, 'CNAME');
   return answers.some((a: any) =>
@@ -50,7 +48,6 @@ export async function hasStartCNAME(domain: string): Promise<boolean> {
   );
 }
 
-// SPF record including _spf.google.com proves Google was the mail provider
 export async function hasSpfGoogle(domain: string): Promise<boolean> {
   const answers = await queryDNS(domain, 'TXT');
   return answers.some((a: any) =>
@@ -58,7 +55,6 @@ export async function hasSpfGoogle(domain: string): Promise<boolean> {
   );
 }
 
-// Query Wayback CDX to confirm Google Sites pages existed for this domain 2006-2012
 export async function hasHistoricalGoogleSites(domain: string): Promise<boolean> {
   try {
     const params = [
@@ -82,8 +78,8 @@ export async function hasHistoricalGoogleSites(domain: string): Promise<boolean>
 }
 
 export interface AdminConsoleResult {
-  active: boolean;  // redirects to accounts.google.com — panel exists
-  redFlag: boolean; // explicitly says "not using Google Workspace"
+  active: boolean;
+  redFlag: boolean;
 }
 
 export async function checkAdminConsole(domain: string): Promise<AdminConsoleResult> {
@@ -116,9 +112,9 @@ export async function checkAdminConsole(domain: string): Promise<AdminConsoleRes
 
 export interface RDAPInfo {
   registrationYear: number | null;
-  available: boolean;      // RDAP 404 = unregistered/available to buy
-  pendingDrop: boolean;    // pendingDelete or redemptionPeriod = expiring soon
-  error: boolean;          // network/timeout — status unknown, don't prune
+  available: boolean;
+  pendingDrop: boolean;
+  error: boolean;
 }
 
 // Single RDAP call returns registration year + availability status
