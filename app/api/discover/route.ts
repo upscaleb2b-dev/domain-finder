@@ -58,7 +58,7 @@ async function fetchCommonCrawl(indexUrl: string, pattern: string): Promise<stri
     `url=${pattern}`,
     'output=json',
     'fl=url',
-    'limit=1000',
+    'limit=5000',
     'collapse=urlkey',
   ].join('&');
   try {
