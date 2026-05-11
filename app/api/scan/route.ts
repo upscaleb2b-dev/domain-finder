@@ -14,7 +14,7 @@ import { computeScore, type ScanResult } from '@/lib/score';
 import { sendHitEmail } from '@/lib/email';
 import { verifyCronSecret } from '@/lib/auth';
 
-const BATCH_SIZE = parseInt(process.env.BATCH_SIZE || '60');
+const BATCH_SIZE = parseInt(process.env.BATCH_SIZE || '100');
 const HIT_THRESHOLD = 40;
 
 async function scanDomain(domain: string): Promise<ScanResult | null> {

@@ -1,14 +1,20 @@
 /**
- * Discovers pre-2012 domains via Archive.org CDX and CommonCrawl CDX APIs.
+ * Discovers pre-2012 domains via Archive.org CDX and multiple CommonCrawl indexes.
  * Runs every 6 hours via Vercel cron / GitHub Actions.
  */
 import { NextResponse } from 'next/server';
 import { kv } from '@/lib/kv';
 
 const WAYBACK_CDX = 'https://web.archive.org/cdx/search/cdx';
-const CC_CDX = 'https://index.commoncrawl.org/CC-MAIN-2012-20-index'; // ~2012 crawl
 
-// All Google Apps /a/ paths that prove legacy free tier was active
+// CommonCrawl indexes from the 2008-2012 era — each is a different crawl dataset
+const CC_INDEXES = [
+  'https://index.commoncrawl.org/CC-MAIN-2008-2009-index',
+  'https://index.commoncrawl.org/CC-MAIN-2009-2010-index',
+  'https://index.commoncrawl.org/CC-MAIN-2012-20-index',
+];
+
+// All Google Apps /a/ paths that prove legacy free tier was active 2006-2012
 const CDX_PATTERNS = [
   'sites.google.com/a/*',
   'mail.google.com/a/*',
@@ -33,7 +39,7 @@ async function fetchWayback(pattern: string): Promise<string[]> {
     'fl=original',
     'from=20060101',
     'to=20121231',
-    'limit=500',
+    'limit=2000',
     'collapse=urlkey',
   ].join('&');
   try {
@@ -49,20 +55,19 @@ async function fetchWayback(pattern: string): Promise<string[]> {
   }
 }
 
-async function fetchCommonCrawl(pattern: string): Promise<string[]> {
+async function fetchCommonCrawl(indexUrl: string, pattern: string): Promise<string[]> {
   const params = [
     `url=${pattern}`,
     'output=json',
     'fl=url',
-    'limit=500',
+    'limit=1000',
     'collapse=urlkey',
   ].join('&');
   try {
-    const res = await fetch(`${CC_CDX}?${params}`, {
+    const res = await fetch(`${indexUrl}?${params}`, {
       signal: AbortSignal.timeout(8000),
     });
     if (!res.ok) return [];
-    // CommonCrawl returns newline-delimited JSON objects
     const text = await res.text();
     return text
       .split('\n')
@@ -79,16 +84,18 @@ async function fetchCommonCrawl(pattern: string): Promise<string[]> {
 export async function GET() {
   const discovered: string[] = [];
 
-  // Wayback CDX — primary source, 6 patterns
+  // Wayback CDX — 6 patterns, up to 2000 results each = up to 12,000 raw URLs
   for (const pattern of CDX_PATTERNS) {
     const domains = await fetchWayback(pattern);
     discovered.push(...domains);
   }
 
-  // CommonCrawl — different dataset, catches domains Wayback missed
-  for (const pattern of CDX_PATTERNS.slice(0, 3)) { // top 3 patterns only to stay under timeout
-    const domains = await fetchCommonCrawl(pattern);
-    discovered.push(...domains);
+  // CommonCrawl — 3 era indexes × top 3 patterns = different coverage
+  for (const indexUrl of CC_INDEXES) {
+    for (const pattern of CDX_PATTERNS.slice(0, 3)) {
+      const domains = await fetchCommonCrawl(indexUrl, pattern);
+      discovered.push(...domains);
+    }
   }
 
   const unique = [...new Set(discovered)];
@@ -105,7 +112,12 @@ export async function GET() {
     timestamp: new Date().toISOString(),
     discovered: newDomains.length,
     total: merged.length,
-    sources: ['archive.org CDX (6 patterns)', 'CommonCrawl CDX (3 patterns)'],
+    sources: [
+      'archive.org CDX (6 patterns × 2000)',
+      'CommonCrawl 2008-09 (3 patterns × 1000)',
+      'CommonCrawl 2009-10 (3 patterns × 1000)',
+      'CommonCrawl 2012 (3 patterns × 1000)',
+    ],
   });
 
   return NextResponse.json({
