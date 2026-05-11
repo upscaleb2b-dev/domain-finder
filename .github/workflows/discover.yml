@@ -1,0 +1,19 @@
+name: Domain Discovery
+
+on:
+  schedule:
+    # Every 6 hours — archive.org CDX rate limits, no point going faster
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - name: Trigger CDX discovery
+        run: |
+          curl -sf --max-time 90 \
+            "${{ secrets.SCANNER_URL }}/api/discover" \
+            -o /dev/null \
+            -w "Status: %{http_code} | Time: %{time_total}s\n"
