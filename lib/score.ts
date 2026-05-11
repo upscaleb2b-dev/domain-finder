@@ -4,6 +4,8 @@ export interface ScanResult {
   legacyCNAME: boolean;
   startCNAME: boolean;
   adminConsole: boolean;
+  spfGoogle: boolean;
+  historicalGoogleSites: boolean;
   registrationYear: number | null;
   score: number;
   timestamp: string;
