@@ -1,10 +1,15 @@
 /**
  * Scans a batch of domains for active legacy Google Apps signals.
+ * Availability check runs first — registered domains are skipped immediately.
  * Runs every hour via Vercel cron.
  */
 import { NextResponse } from 'next/server';
 import { kv } from '@/lib/kv';
-import { hasGoogleMX, hasLegacyCNAME, hasStartCNAME, checkAdminConsole } from '@/lib/dns';
+import {
+  hasGoogleMX, hasLegacyCNAME, hasStartCNAME,
+  hasSpfGoogle, hasHistoricalGoogleSites,
+  checkAdminConsole, getRDAPInfo,
+} from '@/lib/dns';
 import { computeScore, type ScanResult } from '@/lib/score';
 import { sendHitEmail } from '@/lib/email';
 import { verifyCronSecret } from '@/lib/auth';
@@ -12,24 +17,13 @@ import { verifyCronSecret } from '@/lib/auth';
 const BATCH_SIZE = parseInt(process.env.BATCH_SIZE || '60');
 const HIT_THRESHOLD = 40;
 
-async function getRegistrationYear(domain: string): Promise<number | null> {
-  try {
-    const res = await fetch(`https://rdap.org/domain/${domain}`, {
-      signal: AbortSignal.timeout(5000),
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    const events: any[] = data.events || [];
-    const reg = events.find((e: any) => e.eventAction === 'registration');
-    if (!reg) return null;
-    return new Date(reg.eventDate).getFullYear();
-  } catch {
-    return null;
-  }
-}
-
 async function scanDomain(domain: string): Promise<ScanResult | null> {
-  const [googleMX, legacyCNAME, startCNAME, spfGoogle, historicalGoogleSites, adminResult, registrationYear] =
+  // Availability check first — skip domains that are still registered
+  const rdap = await getRDAPInfo(domain);
+  if (!rdap.available && !rdap.pendingDrop) return null;
+
+  // Full signal scan only for available/dropping domains
+  const [googleMX, legacyCNAME, startCNAME, spfGoogle, historicalGoogleSites, adminResult] =
     await Promise.all([
       hasGoogleMX(domain),
       hasLegacyCNAME(domain),
@@ -37,7 +31,6 @@ async function scanDomain(domain: string): Promise<ScanResult | null> {
       hasSpfGoogle(domain),
       hasHistoricalGoogleSites(domain),
       checkAdminConsole(domain),
-      getRegistrationYear(domain),
     ]);
 
   // Skip domains explicitly flagged as not using Google Workspace
@@ -45,16 +38,17 @@ async function scanDomain(domain: string): Promise<ScanResult | null> {
 
   const partial = {
     domain,
+    available: rdap.available,
+    pendingDrop: rdap.pendingDrop,
     googleMX,
     legacyCNAME,
     startCNAME,
     adminConsole: adminResult.active,
     spfGoogle,
     historicalGoogleSites,
-    registrationYear,
+    registrationYear: rdap.registrationYear,
   };
   const score = computeScore(partial);
-
   return { ...partial, score, timestamp: new Date().toISOString(), bought: false };
 }
 
@@ -75,6 +69,7 @@ export async function GET(request: Request) {
     const batch = domainList.slice(currentIndex, currentIndex + BATCH_SIZE);
 
     const rawResults = await Promise.all(batch.map(d => scanDomain(d)));
+    // null = registered (skipped) or red-flagged
     const results = rawResults.filter((r): r is ScanResult => r !== null);
     const hits = results.filter(r => r.score >= HIT_THRESHOLD);
 
@@ -82,7 +77,7 @@ export async function GET(request: Request) {
       const existing: ScanResult[] = (await kv.get('hits')) || [];
       const existingDomains = new Set(existing.map(h => h.domain));
       const newHits = hits.filter(h => !existingDomains.has(h.domain));
-      // Re-scan existing hits with updated data (score may have changed)
+      // Re-score existing hits if they were in this batch
       const updatedExisting = existing.map(h => {
         const rescanned = results.find(r => r.domain === h.domain);
         return rescanned ? { ...rescanned, bought: h.bought } : h;

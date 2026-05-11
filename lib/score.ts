@@ -1,5 +1,7 @@
 export interface ScanResult {
   domain: string;
+  available: boolean;
+  pendingDrop: boolean;
   googleMX: boolean;
   legacyCNAME: boolean;
   startCNAME: boolean;
@@ -12,12 +14,18 @@ export interface ScanResult {
   bought: boolean;
 }
 
+// Scoring weights derived from observed success rates.
+// start.* CNAME → ghs.google.com is the single strongest pre-2010 signal.
+// Admin console redirect proves the panel is still live.
+// Historical CDX evidence confirms Google Apps was actively configured.
 export function computeScore(r: Omit<ScanResult, 'score' | 'timestamp' | 'bought'>): number {
   let score = 0;
+  if (r.startCNAME) score += 55;
+  if (r.adminConsole) score += 45;
+  if (r.historicalGoogleSites) score += 35;
   if (r.googleMX) score += 30;
-  if (r.legacyCNAME) score += 30;
-  if (r.startCNAME) score += 25;
-  if (r.adminConsole) score += 10;
-  if (r.registrationYear && r.registrationYear <= 2010) score += 5;
+  if (r.legacyCNAME) score += 25;
+  if (r.spfGoogle) score += 15;
+  if (r.registrationYear && r.registrationYear <= 2012) score += 15;
   return Math.min(score, 100);
 }

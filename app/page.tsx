@@ -4,6 +4,8 @@ import { useEffect, useState, useCallback } from 'react';
 
 interface Hit {
   domain: string;
+  available: boolean;
+  pendingDrop: boolean;
   googleMX: boolean;
   legacyCNAME: boolean;
   startCNAME: boolean;
@@ -35,6 +37,24 @@ function Signal({ on, label }: { on: boolean; label: string }) {
   return (
     <span title={label} className={`inline-block w-2 h-2 rounded-full ${on ? 'bg-green-400' : 'bg-gray-700'}`} />
   );
+}
+
+function AvailBadge({ available, pendingDrop }: { available: boolean; pendingDrop: boolean }) {
+  if (available) {
+    return (
+      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold bg-green-900 text-green-300">
+        Buy Now
+      </span>
+    );
+  }
+  if (pendingDrop) {
+    return (
+      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold bg-orange-900 text-orange-300">
+        Dropping
+      </span>
+    );
+  }
+  return null;
 }
 
 export default function Dashboard() {
@@ -100,7 +120,7 @@ export default function Dashboard() {
         <div className="flex items-start justify-between mb-8">
           <div>
             <h1 className="text-2xl font-bold mb-1">Legacy Google Finder</h1>
-            <p className="text-gray-500 text-sm">Auto-discovers & scans pre-2012 domains for active Google Apps panels</p>
+            <p className="text-gray-500 text-sm">Scans expired & dropping domains for active Google Apps panels</p>
           </div>
           <button
             onClick={fetchData}
@@ -154,24 +174,26 @@ export default function Dashboard() {
                 tab === t ? 'bg-gray-800 text-white' : 'text-gray-500 hover:text-gray-300'
               }`}
             >
-              {t === 'available' ? `Available (${available.length})` : `Bought (${bought.length})`}
+              {t === 'available' ? `Hits (${available.length})` : `Bought (${bought.length})`}
             </button>
           ))}
         </div>
 
         {/* Legend */}
-        <div className="flex items-center gap-4 mb-3 text-xs text-gray-500">
-          <span className="flex items-center gap-1.5"><Signal on label="MX" /> Google MX</span>
-          <span className="flex items-center gap-1.5"><Signal on label="CNAME" /> Legacy CNAME</span>
-          <span className="flex items-center gap-1.5"><Signal on label="start.*" /> start.* subdomain</span>
-          <span className="flex items-center gap-1.5"><Signal on label="Admin" /> Admin console</span>
+        <div className="flex items-center flex-wrap gap-4 mb-3 text-xs text-gray-500">
+          <span className="flex items-center gap-1.5"><Signal on label="" /> start.* CNAME</span>
+          <span className="flex items-center gap-1.5"><Signal on label="" /> Admin console</span>
+          <span className="flex items-center gap-1.5"><Signal on label="" /> Historical Sites</span>
+          <span className="flex items-center gap-1.5"><Signal on label="" /> Google MX</span>
+          <span className="flex items-center gap-1.5"><Signal on label="" /> Legacy CNAME</span>
+          <span className="flex items-center gap-1.5"><Signal on label="" /> SPF Google</span>
         </div>
 
         {/* Table */}
         {shown.length === 0 ? (
           <div className="bg-gray-900 border border-gray-800 rounded-lg p-12 text-center text-gray-500">
             {tab === 'available'
-              ? 'No hits yet — discovery runs every 6h, scanning every hour.'
+              ? 'No hits yet — scanner only shows available/dropping domains. Discovery runs every 6h, scanning every hour.'
               : 'No domains marked as bought yet.'}
           </div>
         ) : (
@@ -181,6 +203,7 @@ export default function Dashboard() {
                 <tr className="text-xs text-gray-500 border-b border-gray-800">
                   <th className="px-3 py-2 text-left w-8"></th>
                   <th className="px-3 py-2 text-left">Domain</th>
+                  <th className="px-3 py-2 text-center">Status</th>
                   <th className="px-3 py-2 text-center">Score</th>
                   <th className="px-3 py-2 text-center">Signals</th>
                   <th className="px-3 py-2 text-center">Reg. Year</th>
@@ -200,13 +223,18 @@ export default function Dashboard() {
                         {hit.domain}
                       </a>
                     </td>
+                    <td className="px-3 py-3 text-center">
+                      <AvailBadge available={hit.available} pendingDrop={hit.pendingDrop} />
+                    </td>
                     <td className="px-3 py-3 text-center"><ScoreBadge score={hit.score} /></td>
                     <td className="px-3 py-3">
                       <div className="flex items-center justify-center gap-1.5">
-                        <Signal on={hit.googleMX} label="Google MX" />
+                        <Signal on={hit.startCNAME} label="start.* → ghs.google.com (golden signal)" />
+                        <Signal on={hit.adminConsole} label="Admin console live redirect" />
+                        <Signal on={hit.historicalGoogleSites} label="Wayback CDX: Google Sites 2009-2012" />
+                        <Signal on={hit.googleMX} label="Google MX records active" />
                         <Signal on={hit.legacyCNAME} label="Legacy CNAME (ghs.google.com)" />
-                        <Signal on={hit.startCNAME} label="start.* CNAME" />
-                        <Signal on={hit.adminConsole} label="Admin console redirect" />
+                        <Signal on={hit.spfGoogle} label="SPF includes _spf.google.com" />
                       </div>
                     </td>
                     <td className="px-3 py-3 text-center text-gray-400">{hit.registrationYear ?? '—'}</td>

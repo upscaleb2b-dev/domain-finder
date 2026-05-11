@@ -89,7 +89,6 @@ export interface AdminConsoleResult {
 
 export async function checkAdminConsole(domain: string): Promise<AdminConsoleResult> {
   try {
-    // First try HEAD for the redirect check
     const res = await fetch(`https://admin.google.com/a/${domain}`, {
       method: 'GET',
       redirect: 'manual',
@@ -101,7 +100,6 @@ export async function checkAdminConsole(domain: string): Promise<AdminConsoleRes
       return { active: true, redFlag: false };
     }
 
-    // Check response body for the explicit rejection message
     if (res.status === 200) {
       const text = await res.text().catch(() => '');
       if (text.toLowerCase().includes("isn't using google workspace") ||
@@ -114,5 +112,49 @@ export async function checkAdminConsole(domain: string): Promise<AdminConsoleRes
     return { active: false, redFlag: false };
   } catch {
     return { active: false, redFlag: false };
+  }
+}
+
+export interface RDAPInfo {
+  registrationYear: number | null;
+  // RDAP 404 = unregistered/available to buy
+  available: boolean;
+  // pendingDelete or redemptionPeriod = expiring soon, monitor for drop
+  pendingDrop: boolean;
+}
+
+// Single RDAP call returns registration year + availability status
+export async function getRDAPInfo(domain: string): Promise<RDAPInfo> {
+  try {
+    const res = await fetch(`https://rdap.org/domain/${domain}`, {
+      signal: AbortSignal.timeout(6000),
+    });
+
+    // 404 = domain not registered
+    if (res.status === 404) {
+      return { registrationYear: null, available: true, pendingDrop: false };
+    }
+
+    if (!res.ok) {
+      return { registrationYear: null, available: false, pendingDrop: false };
+    }
+
+    const data = await res.json();
+
+    // Check RDAP status codes for pending expiry
+    const statuses: string[] = (data.status || []).map((s: string) => s.toLowerCase());
+    const pendingDrop =
+      statuses.some(s => s.includes('pendingdelete') || s.includes('pending delete') ||
+                         s.includes('redemptionperiod') || s.includes('redemption period'));
+
+    // Extract registration year from events
+    const events: any[] = data.events || [];
+    const reg = events.find((e: any) => e.eventAction === 'registration');
+    const registrationYear = reg ? new Date(reg.eventDate).getFullYear() : null;
+
+    return { registrationYear, available: false, pendingDrop };
+  } catch {
+    // On network error assume registered (conservative — don't waste scan on unknowns)
+    return { registrationYear: null, available: false, pendingDrop: false };
   }
 }
