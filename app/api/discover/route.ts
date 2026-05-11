@@ -1,17 +1,21 @@
 /**
- * Discovers pre-2012 domains via Archive.org CDX API.
- * Runs every 6 hours via Vercel cron.
+ * Discovers pre-2012 domains via Archive.org CDX and CommonCrawl CDX APIs.
+ * Runs every 6 hours via Vercel cron / GitHub Actions.
  */
 import { NextResponse } from 'next/server';
 import { kv } from '@/lib/kv';
 
-const CDX_BASE = 'https://web.archive.org/cdx/search/cdx';
+const WAYBACK_CDX = 'https://web.archive.org/cdx/search/cdx';
+const CC_CDX = 'https://index.commoncrawl.org/CC-MAIN-2012-20-index'; // ~2012 crawl
 
-// Patterns that prove Google Apps was active (avoid encoding * by building URL manually)
+// All Google Apps /a/ paths that prove legacy free tier was active
 const CDX_PATTERNS = [
   'sites.google.com/a/*',
   'mail.google.com/a/*',
   'docs.google.com/a/*',
+  'calendar.google.com/a/*',
+  'drive.google.com/a/*',
+  'contacts.google.com/a/*',
 ];
 
 function extractDomain(rawUrl: string): string | null {
@@ -22,8 +26,7 @@ function extractDomain(rawUrl: string): string | null {
   return d;
 }
 
-async function fetchCDX(pattern: string): Promise<string[]> {
-  // Build URL manually so * stays literal (not %2A)
+async function fetchWayback(pattern: string): Promise<string[]> {
   const params = [
     `url=${pattern}`,
     'output=json',
@@ -33,9 +36,8 @@ async function fetchCDX(pattern: string): Promise<string[]> {
     'limit=500',
     'collapse=urlkey',
   ].join('&');
-
   try {
-    const res = await fetch(`${CDX_BASE}?${params}`, {
+    const res = await fetch(`${WAYBACK_CDX}?${params}`, {
       signal: AbortSignal.timeout(8000),
     });
     if (!res.ok) return [];
@@ -47,11 +49,45 @@ async function fetchCDX(pattern: string): Promise<string[]> {
   }
 }
 
+async function fetchCommonCrawl(pattern: string): Promise<string[]> {
+  const params = [
+    `url=${pattern}`,
+    'output=json',
+    'fl=url',
+    'limit=500',
+    'collapse=urlkey',
+  ].join('&');
+  try {
+    const res = await fetch(`${CC_CDX}?${params}`, {
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) return [];
+    // CommonCrawl returns newline-delimited JSON objects
+    const text = await res.text();
+    return text
+      .split('\n')
+      .filter(Boolean)
+      .map(line => {
+        try { return extractDomain(JSON.parse(line).url || ''); } catch { return null; }
+      })
+      .filter((d): d is string => d !== null);
+  } catch {
+    return [];
+  }
+}
+
 export async function GET() {
   const discovered: string[] = [];
 
+  // Wayback CDX — primary source, 6 patterns
   for (const pattern of CDX_PATTERNS) {
-    const domains = await fetchCDX(pattern);
+    const domains = await fetchWayback(pattern);
+    discovered.push(...domains);
+  }
+
+  // CommonCrawl — different dataset, catches domains Wayback missed
+  for (const pattern of CDX_PATTERNS.slice(0, 3)) { // top 3 patterns only to stay under timeout
+    const domains = await fetchCommonCrawl(pattern);
     discovered.push(...domains);
   }
 
@@ -68,8 +104,13 @@ export async function GET() {
   await kv.set('last_discover', {
     timestamp: new Date().toISOString(),
     discovered: newDomains.length,
-    source: 'archive.org CDX',
+    total: merged.length,
+    sources: ['archive.org CDX (6 patterns)', 'CommonCrawl CDX (3 patterns)'],
   });
 
-  return NextResponse.json({ success: true, discovered: newDomains.length, total: merged.length });
+  return NextResponse.json({
+    success: true,
+    discovered: newDomains.length,
+    total: merged.length,
+  });
 }
