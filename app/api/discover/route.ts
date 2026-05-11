@@ -44,7 +44,7 @@ async function fetchWayback(pattern: string): Promise<string[]> {
   ].join('&');
   try {
     const res = await fetch(`${WAYBACK_CDX}?${params}`, {
-      signal: AbortSignal.timeout(8000),
+      signal: AbortSignal.timeout(7000),
     });
     if (!res.ok) return [];
     const rows: string[][] = await res.json();
@@ -65,7 +65,7 @@ async function fetchCommonCrawl(indexUrl: string, pattern: string): Promise<stri
   ].join('&');
   try {
     const res = await fetch(`${indexUrl}?${params}`, {
-      signal: AbortSignal.timeout(8000),
+      signal: AbortSignal.timeout(7000),
     });
     if (!res.ok) return [];
     const text = await res.text();
@@ -82,21 +82,15 @@ async function fetchCommonCrawl(indexUrl: string, pattern: string): Promise<stri
 }
 
 export async function GET() {
-  const discovered: string[] = [];
+  // Run all queries in parallel — wall time = slowest single request (~7s)
+  // rather than sequential total (~120s which blows the 10s Vercel limit)
+  const waybackPromises = CDX_PATTERNS.map(p => fetchWayback(p));
+  const ccPromises = CC_INDEXES.flatMap(idx =>
+    CDX_PATTERNS.slice(0, 3).map(p => fetchCommonCrawl(idx, p))
+  );
 
-  // Wayback CDX — 6 patterns, up to 2000 results each = up to 12,000 raw URLs
-  for (const pattern of CDX_PATTERNS) {
-    const domains = await fetchWayback(pattern);
-    discovered.push(...domains);
-  }
-
-  // CommonCrawl — 3 era indexes × top 3 patterns = different coverage
-  for (const indexUrl of CC_INDEXES) {
-    for (const pattern of CDX_PATTERNS.slice(0, 3)) {
-      const domains = await fetchCommonCrawl(indexUrl, pattern);
-      discovered.push(...domains);
-    }
-  }
+  const allResults = await Promise.all([...waybackPromises, ...ccPromises]);
+  const discovered = allResults.flat();
 
   const unique = [...new Set(discovered)];
   const existing: string[] = (await kv.get('domains')) || [];
