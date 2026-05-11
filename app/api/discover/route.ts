@@ -39,7 +39,7 @@ async function fetchWayback(pattern: string): Promise<string[]> {
     'fl=original',
     'from=20060101',
     'to=20121231',
-    'limit=2000',
+    'limit=5000',
     'collapse=urlkey',
   ].join('&');
   try {

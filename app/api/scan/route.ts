@@ -1,14 +1,14 @@
 /**
  * Scans a batch of domains for active legacy Google Apps signals.
- * Availability check runs first — registered domains are skipped immediately.
- * Runs every hour via Vercel cron.
+ * Skip cache (7-day TTL) prevents re-checking registered domains.
+ * Availability check runs first — registered domains are cached and skipped.
+ * Runs every 5 minutes via GitHub Actions.
  */
 import { NextResponse } from 'next/server';
 import { kv } from '@/lib/kv';
 import {
   hasGoogleMX, hasLegacyCNAME, hasStartCNAME,
-  hasSpfGoogle, hasHistoricalGoogleSites,
-  checkAdminConsole, getRDAPInfo,
+  hasSpfGoogle, checkAdminConsole, getRDAPInfo,
 } from '@/lib/dns';
 import { computeScore, type ScanResult } from '@/lib/score';
 import { sendHitEmail } from '@/lib/email';
@@ -16,24 +16,21 @@ import { verifyCronSecret } from '@/lib/auth';
 
 const BATCH_SIZE = parseInt(process.env.BATCH_SIZE || '100');
 const HIT_THRESHOLD = 40;
+const SKIP_TTL = 604800; // 7 days
 
 async function scanDomain(domain: string): Promise<ScanResult | null> {
-  // Availability check first — skip domains that are still registered
   const rdap = await getRDAPInfo(domain);
   if (!rdap.available && !rdap.pendingDrop) return null;
 
-  // Full signal scan only for available/dropping domains
-  const [googleMX, legacyCNAME, startCNAME, spfGoogle, historicalGoogleSites, adminResult] =
+  const [googleMX, legacyCNAME, startCNAME, spfGoogle, adminResult] =
     await Promise.all([
       hasGoogleMX(domain),
       hasLegacyCNAME(domain),
       hasStartCNAME(domain),
       hasSpfGoogle(domain),
-      hasHistoricalGoogleSites(domain),
       checkAdminConsole(domain),
     ]);
 
-  // Skip domains explicitly flagged as not using Google Workspace
   if (adminResult.redFlag) return null;
 
   const partial = {
@@ -45,7 +42,6 @@ async function scanDomain(domain: string): Promise<ScanResult | null> {
     startCNAME,
     adminConsole: adminResult.active,
     spfGoogle,
-    historicalGoogleSites,
     registrationYear: rdap.registrationYear,
   };
   const score = computeScore(partial);
@@ -68,8 +64,23 @@ export async function GET(request: Request) {
     if (currentIndex >= domainList.length) currentIndex = 0;
     const batch = domainList.slice(currentIndex, currentIndex + BATCH_SIZE);
 
-    const rawResults = await Promise.all(batch.map(d => scanDomain(d)));
-    // null = registered (skipped) or red-flagged
+    // Batch-check skip cache (1 Redis command for whole batch)
+    const skipKeys = batch.map(d => `skip:${d}`);
+    const skipStatuses = await kv.mget<(string | null)[]>(...skipKeys);
+    const toScan = batch.filter((_, i) => !skipStatuses[i]);
+    const alreadySkipped = batch.length - toScan.length;
+
+    // Scan only uncached domains
+    const rawResults = await Promise.all(toScan.map(d => scanDomain(d)));
+
+    // Cache registered domains (null return = still registered)
+    const registeredDomains = toScan.filter((_, i) => rawResults[i] === null);
+    if (registeredDomains.length > 0) {
+      const pipe = kv.pipeline();
+      registeredDomains.forEach(d => pipe.set(`skip:${d}`, '1', { ex: SKIP_TTL }));
+      await pipe.exec();
+    }
+
     const results = rawResults.filter((r): r is ScanResult => r !== null);
     const hits = results.filter(r => r.score >= HIT_THRESHOLD);
 
@@ -77,7 +88,6 @@ export async function GET(request: Request) {
       const existing: ScanResult[] = (await kv.get('hits')) || [];
       const existingDomains = new Set(existing.map(h => h.domain));
       const newHits = hits.filter(h => !existingDomains.has(h.domain));
-      // Re-score existing hits if they were in this batch
       const updatedExisting = existing.map(h => {
         const rescanned = results.find(r => r.domain === h.domain);
         return rescanned ? { ...rescanned, bought: h.bought } : h;
@@ -96,9 +106,9 @@ export async function GET(request: Request) {
     const newIndex = currentIndex + BATCH_SIZE;
     const logEntry = {
       timestamp: new Date().toISOString(),
-      scanned: batch.length,
+      scanned: toScan.length,
       available: results.length,
-      skipped: batch.length - results.length,
+      skipped: alreadySkipped + registeredDomains.length,
       hits: hits.length,
       batchStart: currentIndex,
     };
@@ -111,9 +121,10 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       success: true,
-      scanned: batch.length,
+      scanned: toScan.length,
+      cacheSkipped: alreadySkipped,
       available: results.length,
-      skipped: batch.length - results.length,
+      skipped: registeredDomains.length,
       hits: hits.length,
       nextIndex: newIndex >= domainList.length ? 0 : newIndex,
       totalDomains: domainList.length,

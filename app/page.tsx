@@ -11,7 +11,6 @@ interface Hit {
   startCNAME: boolean;
   adminConsole: boolean;
   spfGoogle: boolean;
-  historicalGoogleSites: boolean;
   registrationYear: number | null;
   score: number;
   timestamp: string;
@@ -282,7 +281,6 @@ export default function Dashboard() {
         <div className="flex items-center flex-wrap gap-4 mb-3 text-xs text-gray-500">
           <span className="flex items-center gap-1.5"><Signal on label="" /> start.* CNAME</span>
           <span className="flex items-center gap-1.5"><Signal on label="" /> Admin console</span>
-          <span className="flex items-center gap-1.5"><Signal on label="" /> Historical Sites</span>
           <span className="flex items-center gap-1.5"><Signal on label="" /> Google MX</span>
           <span className="flex items-center gap-1.5"><Signal on label="" /> Legacy CNAME</span>
           <span className="flex items-center gap-1.5"><Signal on label="" /> SPF Google</span>
@@ -330,7 +328,6 @@ export default function Dashboard() {
                       <div className="flex items-center justify-center gap-1.5">
                         <Signal on={hit.startCNAME} label="start.* → ghs.google.com (golden signal)" />
                         <Signal on={hit.adminConsole} label="Admin console live redirect" />
-                        <Signal on={hit.historicalGoogleSites} label="Wayback CDX: Google Sites 2009-2012" />
                         <Signal on={hit.googleMX} label="Google MX records active" />
                         <Signal on={hit.legacyCNAME} label="Legacy CNAME (ghs.google.com)" />
                         <Signal on={hit.spfGoogle} label="SPF includes _spf.google.com" />
