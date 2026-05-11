@@ -61,6 +61,7 @@ interface LogEntry {
   scanned: number;
   available: number;
   skipped: number;
+  pruned: number;
   hits: number;
   batchStart: number;
 }
@@ -240,7 +241,8 @@ export default function Dashboard() {
                     <th className="px-4 py-1.5 text-left">Time</th>
                     <th className="px-3 py-1.5 text-center">Checked</th>
                     <th className="px-3 py-1.5 text-center text-green-600">Available</th>
-                    <th className="px-3 py-1.5 text-center text-gray-600">Skipped</th>
+                    <th className="px-3 py-1.5 text-center text-red-800">Pruned</th>
+                    <th className="px-3 py-1.5 text-center text-gray-600">Errors</th>
                     <th className="px-3 py-1.5 text-center text-blue-600">Hits</th>
                     <th className="px-3 py-1.5 text-center">Batch start</th>
                   </tr>
@@ -251,6 +253,7 @@ export default function Dashboard() {
                       <td className="px-4 py-1.5 text-gray-400">{new Date(entry.timestamp).toLocaleTimeString()}</td>
                       <td className="px-3 py-1.5 text-center text-gray-400">{entry.scanned}</td>
                       <td className="px-3 py-1.5 text-center text-green-400">{entry.available}</td>
+                      <td className="px-3 py-1.5 text-center text-red-700">{entry.pruned || 0}</td>
                       <td className="px-3 py-1.5 text-center text-gray-600">{entry.skipped}</td>
                       <td className="px-3 py-1.5 text-center text-blue-400 font-semibold">{entry.hits || 0}</td>
                       <td className="px-3 py-1.5 text-center text-gray-600">{entry.batchStart}</td>

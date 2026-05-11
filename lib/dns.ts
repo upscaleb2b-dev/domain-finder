@@ -34,13 +34,12 @@ const ALL_GOOGLE_CNAME = ['ghs.google.com', 'ghs.googlehosted.com'];
 // Checks mail/calendar/docs/drive/sites subdomains for legacy CNAME
 export async function hasLegacyCNAME(domain: string): Promise<boolean> {
   const subs = ['mail', 'calendar', 'docs', 'drive', 'sites'];
-  for (const sub of subs) {
-    const answers = await queryDNS(`${sub}.${domain}`, 'CNAME');
-    if (answers.some((a: any) =>
+  const results = await Promise.all(subs.map(sub => queryDNS(`${sub}.${domain}`, 'CNAME')));
+  return results.some(answers =>
+    answers.some((a: any) =>
       LEGACY_TARGETS.some(p => String(a.data || '').toLowerCase().includes(p))
-    )) return true;
-  }
-  return false;
+    )
+  );
 }
 
 // start.domain.com → ghs.google.com is the single strongest pre-2010 signal
@@ -117,10 +116,9 @@ export async function checkAdminConsole(domain: string): Promise<AdminConsoleRes
 
 export interface RDAPInfo {
   registrationYear: number | null;
-  // RDAP 404 = unregistered/available to buy
-  available: boolean;
-  // pendingDelete or redemptionPeriod = expiring soon, monitor for drop
-  pendingDrop: boolean;
+  available: boolean;      // RDAP 404 = unregistered/available to buy
+  pendingDrop: boolean;    // pendingDelete or redemptionPeriod = expiring soon
+  error: boolean;          // network/timeout — status unknown, don't prune
 }
 
 // Single RDAP call returns registration year + availability status
@@ -130,13 +128,12 @@ export async function getRDAPInfo(domain: string): Promise<RDAPInfo> {
       signal: AbortSignal.timeout(6000),
     });
 
-    // 404 = domain not registered
     if (res.status === 404) {
-      return { registrationYear: null, available: true, pendingDrop: false };
+      return { registrationYear: null, available: true, pendingDrop: false, error: false };
     }
 
     if (!res.ok) {
-      return { registrationYear: null, available: false, pendingDrop: false };
+      return { registrationYear: null, available: false, pendingDrop: false, error: true };
     }
 
     const data = await res.json();
@@ -152,9 +149,8 @@ export async function getRDAPInfo(domain: string): Promise<RDAPInfo> {
     const reg = events.find((e: any) => e.eventAction === 'registration');
     const registrationYear = reg ? new Date(reg.eventDate).getFullYear() : null;
 
-    return { registrationYear, available: false, pendingDrop };
+    return { registrationYear, available: false, pendingDrop, error: false };
   } catch {
-    // On network error assume registered (conservative — don't waste scan on unknowns)
-    return { registrationYear: null, available: false, pendingDrop: false };
+    return { registrationYear: null, available: false, pendingDrop: false, error: true };
   }
 }

@@ -1,7 +1,6 @@
 /**
  * Scans a batch of domains for active legacy Google Apps signals.
- * Skip cache (7-day TTL) prevents re-checking registered domains.
- * Availability check runs first — registered domains are cached and skipped.
+ * Confirmed-registered domains are pruned from the queue (no TTL keys needed).
  * Runs every 5 minutes via GitHub Actions.
  */
 import { NextResponse } from 'next/server';
@@ -14,14 +13,24 @@ import { computeScore, type ScanResult } from '@/lib/score';
 import { sendHitEmail } from '@/lib/email';
 import { verifyCronSecret } from '@/lib/auth';
 
-const BATCH_SIZE = parseInt(process.env.BATCH_SIZE || '100');
+const BATCH_SIZE = parseInt(process.env.BATCH_SIZE || '200');
 const HIT_THRESHOLD = 40;
-const SKIP_TTL = 604800; // 7 days
 
-async function scanDomain(domain: string): Promise<ScanResult | null> {
+type DomainOutcome =
+  | { tag: 'result'; data: ScanResult }
+  | { tag: 'registered' }   // confirmed by RDAP — safe to prune from queue
+  | { tag: 'skip' };        // error/timeout/red-flag — keep in queue
+
+async function scanDomain(domain: string): Promise<DomainOutcome> {
   const rdap = await getRDAPInfo(domain);
-  if (!rdap.available && !rdap.pendingDrop) return null;
 
+  // Network error — don't know status, keep for next cycle
+  if (rdap.error) return { tag: 'skip' };
+
+  // Confirmed registered — prune from queue
+  if (!rdap.available && !rdap.pendingDrop) return { tag: 'registered' };
+
+  // Full signal scan for available/dropping domains (all in parallel)
   const [googleMX, legacyCNAME, startCNAME, spfGoogle, adminResult] =
     await Promise.all([
       hasGoogleMX(domain),
@@ -31,7 +40,7 @@ async function scanDomain(domain: string): Promise<ScanResult | null> {
       checkAdminConsole(domain),
     ]);
 
-  if (adminResult.redFlag) return null;
+  if (adminResult.redFlag) return { tag: 'skip' };
 
   const partial = {
     domain,
@@ -45,7 +54,7 @@ async function scanDomain(domain: string): Promise<ScanResult | null> {
     registrationYear: rdap.registrationYear,
   };
   const score = computeScore(partial);
-  return { ...partial, score, timestamp: new Date().toISOString(), bought: false };
+  return { tag: 'result', data: { ...partial, score, timestamp: new Date().toISOString(), bought: false } };
 }
 
 export async function GET(request: Request) {
@@ -54,7 +63,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const domainList: string[] = (await kv.get('domains')) || [];
+    let domainList: string[] = (await kv.get('domains')) || [];
     let currentIndex: number = (await kv.get('scan_index')) || 0;
 
     if (domainList.length === 0) {
@@ -64,24 +73,22 @@ export async function GET(request: Request) {
     if (currentIndex >= domainList.length) currentIndex = 0;
     const batch = domainList.slice(currentIndex, currentIndex + BATCH_SIZE);
 
-    // Batch-check skip cache (1 Redis command for whole batch)
-    const skipKeys = batch.map(d => `skip:${d}`);
-    const skipStatuses = await kv.mget<(string | null)[]>(...skipKeys);
-    const toScan = batch.filter((_, i) => !skipStatuses[i]);
-    const alreadySkipped = batch.length - toScan.length;
+    const outcomes = await Promise.all(batch.map((d, i) =>
+      scanDomain(d).then(o => ({ domain: batch[i], outcome: o }))
+    ));
 
-    // Scan only uncached domains
-    const rawResults = await Promise.all(toScan.map(d => scanDomain(d)));
-
-    // Cache registered domains (null return = still registered)
-    const registeredDomains = toScan.filter((_, i) => rawResults[i] === null);
-    if (registeredDomains.length > 0) {
-      const pipe = kv.pipeline();
-      registeredDomains.forEach(d => pipe.set(`skip:${d}`, '1', { ex: SKIP_TTL }));
-      await pipe.exec();
+    // Prune confirmed-registered domains from queue (1 Redis write vs N skip-cache writes)
+    const registeredSet = new Set(
+      outcomes.filter(o => o.outcome.tag === 'registered').map(o => o.domain)
+    );
+    if (registeredSet.size > 0) {
+      domainList = domainList.filter(d => !registeredSet.has(d));
     }
 
-    const results = rawResults.filter((r): r is ScanResult => r !== null);
+    const results = outcomes
+      .filter((o): o is { domain: string; outcome: { tag: 'result'; data: ScanResult } } =>
+        o.outcome.tag === 'result')
+      .map(o => o.outcome.data);
     const hits = results.filter(r => r.score >= HIT_THRESHOLD);
 
     if (hits.length > 0) {
@@ -103,30 +110,35 @@ export async function GET(request: Request) {
       }
     }
 
-    const newIndex = currentIndex + BATCH_SIZE;
+    // Advance index; account for pruned entries shifting positions
+    const newIndex = currentIndex + BATCH_SIZE - registeredSet.size;
+    const nextIndex = newIndex >= domainList.length ? 0 : newIndex;
+
     const logEntry = {
       timestamp: new Date().toISOString(),
-      scanned: toScan.length,
+      scanned: batch.length,
       available: results.length,
-      skipped: alreadySkipped + registeredDomains.length,
+      skipped: outcomes.filter(o => o.outcome.tag === 'skip').length,
+      pruned: registeredSet.size,
       hits: hits.length,
       batchStart: currentIndex,
     };
     const prevLog: typeof logEntry[] = (await kv.get('scan_log')) || [];
     await Promise.all([
-      kv.set('scan_index', newIndex >= domainList.length ? 0 : newIndex),
+      kv.set('domains', domainList),
+      kv.set('scan_index', nextIndex),
       kv.set('last_scan', logEntry),
       kv.set('scan_log', [logEntry, ...prevLog].slice(0, 50)),
     ]);
 
     return NextResponse.json({
       success: true,
-      scanned: toScan.length,
-      cacheSkipped: alreadySkipped,
+      scanned: batch.length,
       available: results.length,
-      skipped: registeredDomains.length,
+      pruned: registeredSet.size,
+      skipped: outcomes.filter(o => o.outcome.tag === 'skip').length,
       hits: hits.length,
-      nextIndex: newIndex >= domainList.length ? 0 : newIndex,
+      nextIndex,
       totalDomains: domainList.length,
     });
   } catch (err: any) {
