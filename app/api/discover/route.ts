@@ -36,7 +36,7 @@ async function fetchCDX(pattern: string): Promise<string[]> {
 
   try {
     const res = await fetch(`${CDX_BASE}?${params}`, {
-      signal: AbortSignal.timeout(8000), // stay under Vercel's 10s limit
+      signal: AbortSignal.timeout(8000),
     });
     if (!res.ok) return [];
     const rows: string[][] = await res.json();
@@ -50,7 +50,6 @@ async function fetchCDX(pattern: string): Promise<string[]> {
 export async function GET() {
   const discovered: string[] = [];
 
-  // Run CDX queries sequentially to avoid hammering the API
   for (const pattern of CDX_PATTERNS) {
     const domains = await fetchCDX(pattern);
     discovered.push(...domains);

@@ -4,10 +4,7 @@
  */
 import { NextResponse } from 'next/server';
 import { kv } from '@/lib/kv';
-import {
-  hasGoogleMX, hasLegacyCNAME, hasStartCNAME,
-  hasSpfGoogle, hasHistoricalGoogleSites, checkAdminConsole,
-} from '@/lib/dns';
+import { hasGoogleMX, hasLegacyCNAME, hasStartCNAME, checkAdminConsole } from '@/lib/dns';
 import { computeScore, type ScanResult } from '@/lib/score';
 import { sendHitEmail } from '@/lib/email';
 import { verifyCronSecret } from '@/lib/auth';
@@ -57,6 +54,7 @@ async function scanDomain(domain: string): Promise<ScanResult | null> {
     registrationYear,
   };
   const score = computeScore(partial);
+
   return { ...partial, score, timestamp: new Date().toISOString(), bought: false };
 }
 
