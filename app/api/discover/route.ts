@@ -92,14 +92,6 @@ export async function GET() {
   const allResults = await Promise.all([...waybackPromises, ...ccPromises]);
   const discovered = allResults.flat();
 
-  // CommonCrawl — 3 era indexes × top 3 patterns = different coverage
-  for (const indexUrl of CC_INDEXES) {
-    for (const pattern of CDX_PATTERNS.slice(0, 3)) {
-      const domains = await fetchCommonCrawl(indexUrl, pattern);
-      discovered.push(...domains);
-    }
-  }
-
   const unique = [...new Set(discovered)];
   const existing: string[] = (await kv.get('domains')) || [];
   const existingSet = new Set(existing);
