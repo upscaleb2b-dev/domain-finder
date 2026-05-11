@@ -3,7 +3,7 @@ const DOH_URL = 'https://dns.google/resolve';
 async function queryDNS(name: string, type: string): Promise<any[]> {
   try {
     const url = `${DOH_URL}?name=${encodeURIComponent(name)}&type=${type}`;
-    const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
+    const res = await fetch(url, { signal: AbortSignal.timeout(4000) });
     if (!res.ok) return [];
     const data = await res.json();
     return data.Answer || [];
@@ -91,7 +91,7 @@ export async function checkAdminConsole(domain: string): Promise<AdminConsoleRes
     const res = await fetch(`https://admin.google.com/a/${domain}`, {
       method: 'GET',
       redirect: 'manual',
-      signal: AbortSignal.timeout(7000),
+      signal: AbortSignal.timeout(5000),
     });
     const location = (res.headers.get('location') || '').toLowerCase();
 
@@ -125,7 +125,7 @@ export interface RDAPInfo {
 export async function getRDAPInfo(domain: string): Promise<RDAPInfo> {
   try {
     const res = await fetch(`https://rdap.org/domain/${domain}`, {
-      signal: AbortSignal.timeout(6000),
+      signal: AbortSignal.timeout(4000),
     });
 
     if (res.status === 404) {
