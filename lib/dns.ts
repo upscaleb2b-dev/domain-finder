@@ -100,9 +100,29 @@ export interface RDAPInfo {
   error: boolean;
 }
 
+// Direct RDAP endpoints for high-volume TLDs — avoids rdap.org rate limits
+const RDAP_DIRECT: Record<string, string> = {
+  com: 'https://rdap.verisign.com/com/v1/domain/',
+  net: 'https://rdap.verisign.com/net/v1/domain/',
+  org: 'https://rdap.publicinterestregistry.org/rdap/domain/',
+  info: 'https://rdap.afilias.net/rdap/info/domain/',
+  biz: 'https://rdap.afilias.net/rdap/biz/domain/',
+  io:  'https://rdap.nic.io/domain/',
+  co:  'https://rdap.nic.co/domain/',
+  me:  'https://rdap.nic.me/domain/',
+  tv:  'https://rdap.verisign.com/tv/v1/domain/',
+  cc:  'https://rdap.verisign.com/cc/v1/domain/',
+};
+
+function rdapUrl(domain: string): string {
+  const tld = domain.split('.').pop()?.toLowerCase() || '';
+  const base = RDAP_DIRECT[tld];
+  return base ? `${base}${domain}` : `https://rdap.org/domain/${domain}`;
+}
+
 export async function getRDAPInfo(domain: string): Promise<RDAPInfo> {
   try {
-    const res = await fetch(`https://rdap.org/domain/${domain}`, {
+    const res = await fetch(rdapUrl(domain), {
       signal: AbortSignal.timeout(4000),
     });
 
