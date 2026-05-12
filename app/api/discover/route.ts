@@ -22,14 +22,21 @@ const CDX_PATTERNS = [
   'contacts.google.com/a/*',
 ];
 
-const SKIP_TLDS = ['.edu', '.gov', '.mil'];
+const SKIP_TLDS = [
+  '.edu', '.gov', '.mil',
+  '.edu.au', '.edu.tw', '.edu.cn', '.edu.hk', '.edu.sg', '.edu.my',
+  '.edu.ph', '.edu.pk', '.edu.ng', '.edu.gh', '.edu.br', '.edu.mx',
+  '.edu.ar', '.edu.co', '.edu.pe', '.edu.ec', '.edu.ve',
+  '.ac.uk', '.sch.uk', '.ac.nz', '.ac.jp', '.ac.kr', '.ac.za',
+  '.ac.in', '.ac.id', '.gov.uk', '.gov.au', '.gov.in', '.gov.cn',
+];
 
 function extractDomain(rawUrl: string): string | null {
   const match = rawUrl.match(/\/a\/([a-z0-9][a-z0-9\-\.]{1,60}\.[a-z]{2,})/i);
   if (!match) return null;
   const d = match[1].toLowerCase();
   if (d.endsWith('.google.com') || d.endsWith('.googleapis.com')) return null;
-  if (SKIP_TLDS.some(tld => d.endsWith(tld))) return null;
+  if (SKIP_TLDS.some(tld => d.endsWith(tld)) || d.includes('.edu.') || d.includes('.k12.')) return null;
   return d;
 }
 

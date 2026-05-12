@@ -17,8 +17,16 @@ const BATCH_SIZE = parseInt(process.env.BATCH_SIZE || '300');
 const HIT_THRESHOLD = 40;
 
 // TLDs that can't be publicly registered — prune immediately without RDAP
-const BLOCKED_SUFFIXES = ['.edu', '.gov', '.mil', '.ac.uk', '.sch.uk'];
-const BLOCKED_PATTERNS = ['.k12.'];
+const BLOCKED_SUFFIXES = [
+  '.edu', '.gov', '.mil',
+  // Country academic/government TLDs
+  '.edu.au', '.edu.tw', '.edu.cn', '.edu.hk', '.edu.sg', '.edu.my',
+  '.edu.ph', '.edu.pk', '.edu.ng', '.edu.gh', '.edu.br', '.edu.mx',
+  '.edu.ar', '.edu.co', '.edu.pe', '.edu.ec', '.edu.ve',
+  '.ac.uk', '.sch.uk', '.ac.nz', '.ac.jp', '.ac.kr', '.ac.za',
+  '.ac.in', '.ac.id', '.gov.uk', '.gov.au', '.gov.in', '.gov.cn',
+];
+const BLOCKED_PATTERNS = ['.k12.', '.edu.'];
 function isBlocked(domain: string): boolean {
   return BLOCKED_SUFFIXES.some(s => domain.endsWith(s)) ||
          BLOCKED_PATTERNS.some(p => domain.includes(p));
