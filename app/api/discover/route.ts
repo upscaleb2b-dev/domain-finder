@@ -11,8 +11,16 @@ const CC_INDEXES = [
   'https://index.commoncrawl.org/CC-MAIN-2008-2009-index',
   'https://index.commoncrawl.org/CC-MAIN-2009-2010-index',
   'https://index.commoncrawl.org/CC-MAIN-2012-20-index',
+  'https://index.commoncrawl.org/CC-MAIN-2013-20-index',
   'https://index.commoncrawl.org/CC-MAIN-2013-48-index',
+  'https://index.commoncrawl.org/CC-MAIN-2014-23-index',
+  'https://index.commoncrawl.org/CC-MAIN-2014-42-index',
   'https://index.commoncrawl.org/CC-MAIN-2014-52-index',
+  'https://index.commoncrawl.org/CC-MAIN-2015-11-index',
+  'https://index.commoncrawl.org/CC-MAIN-2015-22-index',
+  'https://index.commoncrawl.org/CC-MAIN-2015-32-index',
+  'https://index.commoncrawl.org/CC-MAIN-2015-40-index',
+  'https://index.commoncrawl.org/CC-MAIN-2015-48-index',
 ];
 
 const CDX_PATTERNS = [
@@ -52,7 +60,7 @@ async function fetchWayback(pattern: string): Promise<string[]> {
     'output=json',
     'fl=original',
     'from=20060101',
-    'to=20121231',
+    'to=20151231',
     'limit=5000',
     'collapse=urlkey',
   ].join('&');
@@ -89,6 +97,25 @@ async function fetchCommonCrawl(indexUrl: string, pattern: string): Promise<stri
       .map(line => {
         try { return extractDomain(JSON.parse(line).url || ''); } catch { return null; }
       })
+      .filter((d): d is string => d !== null);
+  } catch {
+    return [];
+  }
+}
+
+const URLSCAN_SUBS = ['mail', 'sites', 'docs', 'calendar', 'drive', 'groups'];
+
+async function fetchUrlScan(sub: string): Promise<string[]> {
+  const q = encodeURIComponent(`page.domain:${sub}.google.com AND page.url:*/a/*`);
+  try {
+    const res = await fetch(`https://urlscan.io/api/v1/search/?q=${q}&size=10000`, {
+      signal: AbortSignal.timeout(7000),
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    const items: any[] = data.results || [];
+    return items
+      .map((r: any) => extractDomain(r.page?.url || r.task?.url || ''))
       .filter((d): d is string => d !== null);
   } catch {
     return [];
@@ -137,11 +164,12 @@ async function fetchCrtSh(subdomain: string): Promise<string[]> {
 export async function GET() {
   const waybackPromises = CDX_PATTERNS.map(p => fetchWayback(p));
   const ccPromises = CC_INDEXES.flatMap(idx =>
-    CDX_PATTERNS.slice(0, 4).map(p => fetchCommonCrawl(idx, p))
+    CDX_PATTERNS.map(p => fetchCommonCrawl(idx, p))
   );
   const crtShPromises = CRTSH_SUBS.map(s => fetchCrtSh(s));
+  const urlScanPromises = URLSCAN_SUBS.map(s => fetchUrlScan(s));
 
-  const allResults = await Promise.all([...waybackPromises, ...ccPromises, ...crtShPromises]);
+  const allResults = await Promise.all([...waybackPromises, ...ccPromises, ...crtShPromises, ...urlScanPromises]);
   const discovered = allResults.flat();
 
   const unique = [...new Set(discovered)];
