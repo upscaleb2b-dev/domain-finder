@@ -1,8 +1,15 @@
 import { NextResponse } from 'next/server';
 import { kv } from '@/lib/kv';
 
-const BLOCKED_SUFFIXES = ['.edu', '.gov', '.mil', '.ac.uk', '.sch.uk'];
-const BLOCKED_PATTERNS = ['.k12.'];
+const BLOCKED_SUFFIXES = [
+  '.edu', '.gov', '.mil',
+  '.edu.au', '.edu.tw', '.edu.cn', '.edu.hk', '.edu.sg', '.edu.my',
+  '.edu.ph', '.edu.pk', '.edu.ng', '.edu.gh', '.edu.br', '.edu.mx',
+  '.edu.ar', '.edu.co', '.edu.pe', '.edu.ec', '.edu.ve',
+  '.ac.uk', '.sch.uk', '.ac.nz', '.ac.jp', '.ac.kr', '.ac.za',
+  '.ac.in', '.ac.id', '.gov.uk', '.gov.au', '.gov.in', '.gov.cn',
+];
+const BLOCKED_PATTERNS = ['.k12.', '.edu.'];
 function isBlocked(d: string): boolean {
   return BLOCKED_SUFFIXES.some(s => d.endsWith(s)) || BLOCKED_PATTERNS.some(p => d.includes(p));
 }

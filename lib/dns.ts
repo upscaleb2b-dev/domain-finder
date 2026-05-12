@@ -107,6 +107,12 @@ export async function getRDAPInfo(domain: string): Promise<RDAPInfo> {
     });
 
     if (res.status === 404) {
+      // RDAP 404 = unregistered, but some ccTLD registries return 404 for registered domains.
+      // Cross-check with DNS: any registered domain has NS records.
+      const ns = await queryDNS(domain, 'NS');
+      if (ns.length > 0) {
+        return { registrationYear: null, available: false, pendingDrop: false, error: false };
+      }
       return { registrationYear: null, available: true, pendingDrop: false, error: false };
     }
 
