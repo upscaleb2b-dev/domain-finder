@@ -112,6 +112,19 @@ const RDAP_DIRECT: Record<string, string> = {
   me:  'https://rdap.nic.me/domain/',
   tv:  'https://rdap.verisign.com/tv/v1/domain/',
   cc:  'https://rdap.verisign.com/cc/v1/domain/',
+  // ccTLDs with known-good RDAP servers (avoids false 404s from rdap.org proxy)
+  dk:  'https://rdap.dk/domain/',
+  de:  'https://rdap.denic.de/domain/',
+  nl:  'https://rdap.sidn.nl/domain/',
+  fr:  'https://rdap.nic.fr/domain/',
+  uk:  'https://rdap.nominet.uk/domain/',
+  ca:  'https://rdap.ca/domain/',
+  ch:  'https://rdap.nic.ch/domain/',
+  se:  'https://rdap.iis.se/domain/',
+  no:  'https://rdap.norid.no/domain/',
+  be:  'https://rdap.dns.be/domain/',
+  pl:  'https://rdap.dns.pl/domain/',
+  cz:  'https://rdap.nic.cz/domain/',
 };
 
 function rdapUrl(domain: string): string {
@@ -128,9 +141,12 @@ export async function getRDAPInfo(domain: string): Promise<RDAPInfo> {
 
     if (res.status === 404) {
       // RDAP 404 = unregistered, but some ccTLD registries return 404 for registered domains.
-      // Cross-check with DNS: any registered domain has NS records.
-      const ns = await queryDNS(domain, 'NS');
-      if (ns.length > 0) {
+      // Cross-check with DNS: registered domains always have NS records and usually A records.
+      const [ns, a] = await Promise.all([
+        queryDNS(domain, 'NS'),
+        queryDNS(domain, 'A'),
+      ]);
+      if (ns.length > 0 || a.length > 0) {
         return { registrationYear: null, available: false, pendingDrop: false, error: false };
       }
       return { registrationYear: null, available: true, pendingDrop: false, error: false };
