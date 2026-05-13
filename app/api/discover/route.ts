@@ -45,12 +45,34 @@ const SKIP_TLDS = [
   '.ac.in', '.ac.id', '.gov.uk', '.gov.au', '.gov.in', '.gov.cn',
 ];
 
+// Purchasable ccSLD second-level patterns (e.g. example.co.uk is fine, example.za.net is not)
+const KNOWN_CCSLDS = new Set([
+  'co.uk', 'org.uk', 'me.uk', 'net.uk', 'ltd.uk', 'plc.uk',
+  'com.au', 'net.au', 'org.au', 'id.au',
+  'co.nz', 'net.nz', 'org.nz',
+  'co.jp', 'or.jp', 'ne.jp',
+  'com.br', 'net.br', 'org.br',
+  'co.in', 'net.in', 'org.in',
+  'co.za', 'org.za', 'net.za',
+  'com.mx', 'com.ar', 'com.co', 'com.pe', 'com.ve',
+  'com.sg', 'com.hk', 'com.tw', 'com.my', 'com.ph',
+  'com.tr', 'com.ua', 'com.eg', 'com.ng', 'com.gh',
+]);
+
+function isRegisterable(domain: string): boolean {
+  const parts = domain.split('.');
+  if (parts.length === 2) return true;
+  if (parts.length === 3) return KNOWN_CCSLDS.has(parts.slice(1).join('.'));
+  return false;
+}
+
 function extractDomain(rawUrl: string): string | null {
   const match = rawUrl.match(/\/a\/([a-z0-9][a-z0-9\-\.]{1,60}\.[a-z]{2,})/i);
   if (!match) return null;
   const d = match[1].toLowerCase();
   if (d.endsWith('.google.com') || d.endsWith('.googleapis.com')) return null;
   if (SKIP_TLDS.some(tld => d.endsWith(tld)) || d.includes('.edu.') || d.includes('.k12.')) return null;
+  if (!isRegisterable(d)) return null;
   return d;
 }
 
