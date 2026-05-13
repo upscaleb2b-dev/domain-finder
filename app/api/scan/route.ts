@@ -27,7 +27,29 @@ const BLOCKED_SUFFIXES = [
   '.ac.in', '.ac.id', '.gov.uk', '.gov.au', '.gov.in', '.gov.cn',
 ];
 const BLOCKED_PATTERNS = ['.k12.', '.edu.'];
+
+const KNOWN_CCSLDS = new Set([
+  'co.uk', 'org.uk', 'me.uk', 'net.uk', 'ltd.uk', 'plc.uk',
+  'com.au', 'net.au', 'org.au', 'id.au',
+  'co.nz', 'net.nz', 'org.nz',
+  'co.jp', 'or.jp', 'ne.jp',
+  'com.br', 'net.br', 'org.br',
+  'co.in', 'net.in', 'org.in',
+  'co.za', 'org.za', 'net.za',
+  'com.mx', 'com.ar', 'com.co', 'com.pe', 'com.ve',
+  'com.sg', 'com.hk', 'com.tw', 'com.my', 'com.ph',
+  'com.tr', 'com.ua', 'com.eg', 'com.ng', 'com.gh',
+]);
+
+function isRegisterable(domain: string): boolean {
+  const parts = domain.split('.');
+  if (parts.length === 2) return true;
+  if (parts.length === 3) return KNOWN_CCSLDS.has(parts.slice(1).join('.'));
+  return false;
+}
+
 function isBlocked(domain: string): boolean {
+  if (!isRegisterable(domain)) return true;
   return BLOCKED_SUFFIXES.some(s => domain.endsWith(s)) ||
          BLOCKED_PATTERNS.some(p => domain.includes(p));
 }
