@@ -14,7 +14,7 @@ import { sendHitEmail } from '@/lib/email';
 import { verifyCronSecret } from '@/lib/auth';
 
 const BATCH_SIZE = parseInt(process.env.BATCH_SIZE || '300');
-const HIT_THRESHOLD = 40;
+const HIT_THRESHOLD = 30;
 
 // TLDs that can't be publicly registered — prune immediately without RDAP
 const BLOCKED_SUFFIXES = [

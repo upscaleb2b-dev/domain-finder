@@ -83,7 +83,7 @@ async function fetchWayback(pattern: string): Promise<string[]> {
     'fl=original',
     'from=20060101',
     'to=20151231',
-    'limit=5000',
+    'limit=10000',
     'collapse=urlkey',
   ].join('&');
   try {
@@ -146,9 +146,10 @@ async function fetchUrlScan(sub: string): Promise<string[]> {
 
 // Subdomains indicating Google Apps usage — used for crt.sh queries
 const CRTSH_SUBS = ['mail', 'sites', 'docs', 'calendar', 'drive'];
+const CRTSH_TLDS = ['com', 'net', 'org', 'io', 'co', 'biz', 'info', 'me'];
 
-async function fetchCrtSh(subdomain: string): Promise<string[]> {
-  const q = encodeURIComponent(`${subdomain}.%`);
+async function fetchCrtSh(subdomain: string, tld: string): Promise<string[]> {
+  const q = encodeURIComponent(`${subdomain}.%.${tld}`);
   try {
     const res = await fetch(`https://crt.sh/?q=${q}&output=json`, {
       signal: AbortSignal.timeout(7000),
@@ -158,14 +159,9 @@ async function fetchCrtSh(subdomain: string): Promise<string[]> {
     const results: string[] = [];
     const prefix = `${subdomain}.`;
     for (const cert of data) {
-      // Only Google-issued certs from the legacy era
-      const issuer = String(cert.issuer_name || '').toLowerCase();
-      if (!issuer.includes('google')) continue;
       const notBefore = new Date(cert.not_before || '');
       if (isNaN(notBefore.getTime())) continue;
-      const year = notBefore.getFullYear();
-      if (year < 2006 || year > 2013) continue;
-      // name_value can contain multiple SANs separated by newlines
+      if (notBefore.getFullYear() > 2013) continue;
       const names = String(cert.name_value || cert.common_name || '')
         .split('\n')
         .map(s => s.trim())
@@ -188,7 +184,7 @@ export async function GET() {
   const ccPromises = CC_INDEXES.flatMap(idx =>
     CDX_PATTERNS.map(p => fetchCommonCrawl(idx, p))
   );
-  const crtShPromises = CRTSH_SUBS.map(s => fetchCrtSh(s));
+  const crtShPromises = CRTSH_SUBS.flatMap(s => CRTSH_TLDS.map(t => fetchCrtSh(s, t)));
   const urlScanPromises = URLSCAN_SUBS.map(s => fetchUrlScan(s));
 
   const allResults = await Promise.all([...waybackPromises, ...ccPromises, ...crtShPromises, ...urlScanPromises]);
