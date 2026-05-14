@@ -5,11 +5,8 @@
  */
 import { NextResponse } from 'next/server';
 import { kv } from '@/lib/kv';
-import {
-  hasMXRecords, hasCNAMESignal, hasSubCNAME,
-  hasSPFRecord, checkPanel, getRDAPInfo,
-} from '@/lib/dns';
-import { computeScore, type ScanResult } from '@/lib/score';
+import { checkPanel, getRDAPInfo } from '@/lib/dns';
+import { type ScanResult } from '@/lib/score';
 import { sendHitEmail } from '@/lib/email';
 import { verifyCronSecret } from '@/lib/auth';
 
@@ -65,34 +62,32 @@ async function scanDomain(domain: string): Promise<DomainOutcome> {
   if (rdap.error) return { tag: 'skip' };
   if (!rdap.available && !rdap.pendingDrop) return { tag: 'registered' };
 
-  const [mxRecords, cnameSignal, subCNAME, spfRecord, panelResult] =
-    await Promise.all([
-      hasMXRecords(domain),
-      hasCNAMESignal(domain),
-      hasSubCNAME(domain),
-      hasSPFRecord(domain),
-      checkPanel(domain),
-    ]);
+  // When a domain expires its DNS zone is wiped — MX/CNAME/SPF are gone.
+  // The only signal that survives on Google's servers is the admin panel.
+  const panelResult = await checkPanel(domain);
+  if (!panelResult.active) return { tag: 'skip' };
 
-  if (panelResult.redFlag) return { tag: 'skip' };
-
-  const partial = {
-    domain,
-    available: rdap.available,
-    pendingDrop: rdap.pendingDrop,
-    mxRecords,
-    cnameSignal,
-    subCNAME,
-    panelActive: panelResult.active,
-    spfRecord,
-    registrationYear: rdap.registrationYear,
+  return {
+    tag: 'result',
+    data: {
+      domain,
+      available: rdap.available,
+      pendingDrop: rdap.pendingDrop,
+      mxRecords: false,
+      cnameSignal: false,
+      subCNAME: false,
+      panelActive: true,
+      spfRecord: false,
+      registrationYear: rdap.registrationYear,
+      score: 100,
+      timestamp: new Date().toISOString(),
+      bought: false,
+    },
   };
-  const score = computeScore(partial);
-  return { tag: 'result', data: { ...partial, score, timestamp: new Date().toISOString(), bought: false } };
 }
 
 async function saveHits(results: ScanResult[]) {
-  const hits = results.filter(r => r.score >= HIT_THRESHOLD);
+  const hits = results; // every result passed scanDomain — panel confirmed active
   if (hits.length === 0) return 0;
 
   const existing: ScanResult[] = (await kv.get('hits')) || [];

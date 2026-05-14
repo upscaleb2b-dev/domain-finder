@@ -144,6 +144,73 @@ async function fetchUrlScan(sub: string): Promise<string[]> {
   }
 }
 
+// Broad pre-2012 domain discovery — any domain from these TLDs, not just Google Apps ones
+const BROAD_TLDS = ['com', 'net', 'org', 'biz', 'info'];
+
+function extractBaseDomain(rawUrl: string): string | null {
+  try {
+    const u = new URL(rawUrl.startsWith('http') ? rawUrl : `http://${rawUrl}`);
+    const host = u.hostname.toLowerCase();
+    if (!host || !host.includes('.')) return null;
+    const parts = host.split('.');
+    // Walk labels from left, return first registerable portion
+    for (let i = 0; i < parts.length - 1; i++) {
+      const candidate = parts.slice(i).join('.');
+      if (!isRegisterable(candidate)) continue;
+      if (candidate.endsWith('.google.com') || candidate.endsWith('.googleapis.com')) return null;
+      if (SKIP_TLDS.some(t => candidate.endsWith(t))) return null;
+      if (candidate.includes('.edu.') || candidate.includes('.k12.')) return null;
+      return candidate;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchWaybackBroad(tld: string): Promise<string[]> {
+  const params = [
+    `url=*.${tld}/*`,
+    'output=json',
+    'fl=original',
+    'from=20060101',
+    'to=20121231',
+    'limit=10000',
+    'collapse=urlkey',
+  ].join('&');
+  try {
+    const res = await fetch(`${WAYBACK_CDX}?${params}`, { signal: AbortSignal.timeout(7000) });
+    if (!res.ok) return [];
+    const rows: string[][] = await res.json();
+    if (!Array.isArray(rows) || rows.length < 2) return [];
+    return rows.slice(1)
+      .map(r => extractBaseDomain(r[0] || ''))
+      .filter((d): d is string => d !== null);
+  } catch {
+    return [];
+  }
+}
+
+async function fetchCCBroad(indexUrl: string, tld: string): Promise<string[]> {
+  const params = [
+    `url=*.${tld}/*`,
+    'output=json',
+    'fl=url',
+    'limit=10000',
+    'collapse=urlkey',
+  ].join('&');
+  try {
+    const res = await fetch(`${indexUrl}?${params}`, { signal: AbortSignal.timeout(7000) });
+    if (!res.ok) return [];
+    const text = await res.text();
+    return text.split('\n').filter(Boolean).map(line => {
+      try { return extractBaseDomain(JSON.parse(line).url || ''); } catch { return null; }
+    }).filter((d): d is string => d !== null);
+  } catch {
+    return [];
+  }
+}
+
 // Subdomains indicating Google Apps usage — used for crt.sh queries
 const CRTSH_SUBS = ['mail', 'sites', 'docs', 'calendar', 'drive'];
 const CRTSH_TLDS = ['com', 'net', 'org', 'io', 'co', 'biz', 'info', 'me'];
@@ -186,8 +253,16 @@ export async function GET() {
   );
   const crtShPromises = CRTSH_SUBS.flatMap(s => CRTSH_TLDS.map(t => fetchCrtSh(s, t)));
   const urlScanPromises = URLSCAN_SUBS.map(s => fetchUrlScan(s));
+  // Broad pre-2012 domain sweep — not Google-specific, catches any domain that existed pre-2012
+  const broadWaybackPromises = BROAD_TLDS.map(t => fetchWaybackBroad(t));
+  const broadCCPromises = CC_INDEXES.slice(0, 3).flatMap(idx =>
+    BROAD_TLDS.map(t => fetchCCBroad(idx, t))
+  );
 
-  const allResults = await Promise.all([...waybackPromises, ...ccPromises, ...crtShPromises, ...urlScanPromises]);
+  const allResults = await Promise.all([
+    ...waybackPromises, ...ccPromises, ...crtShPromises,
+    ...urlScanPromises, ...broadWaybackPromises, ...broadCCPromises,
+  ]);
   const discovered = allResults.flat();
 
   const unique = [...new Set(discovered)];
